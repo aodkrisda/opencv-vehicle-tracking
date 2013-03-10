@@ -100,10 +100,11 @@ int main(int argc, char** argv)
 	std::vector<KeyPoint> keypoints_1, keypoints_2;
 	SiftDescriptorExtractor extractor;
 	Mat descriptors_1, descriptors_2;
-	FlannBasedMatcher matcher;
+	BruteForceMatcher< L2<float> > matcher;
 	std::vector< DMatch > matches;
 	std::vector< DMatch > good_matches;
-	int fuzziness = 30;
+	int fuzziness_min = 3;
+	int fuzziness_max = 30;
 	Mat img_matches;
 
 
@@ -282,7 +283,7 @@ int main(int argc, char** argv)
                 // This part just to visualize bounding boxes and centers if desired
                 cvCopy(ImaskCodeBook,ImaskCodeBookCC);
 				cvSet(justForeground, cvScalar(0,0,0));
-				cvCopy(rawImage,justForeground,ImaskCodeBook);
+				cvCopy(rawImage,justForeground,ImaskCodeBookClosed);
                 //cvSegmentFGMask( ImaskCodeBookCC );
 
 
@@ -421,21 +422,29 @@ int main(int argc, char** argv)
 
 						cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
 
-						img1 = Mat(prevFrameMotionBlobs);
-						img2 = Mat(justForegroundGray);
+						try
+						{
+							img1 = Mat(prevFrameMotionBlobs);
+							img2 = Mat(justForegroundGray);
 	
-						//-- Step 1: Detect the keypoints using SURF Detector
-						detector.detect( img1, keypoints_1 );
-						detector.detect( img2, keypoints_2 );
+							//-- Step 1: Detect the keypoints using SURF Detector
+							detector.detect( img1, keypoints_1 );
+							detector.detect( img2, keypoints_2 );
 
-						//-- Step 2: Calculate descriptors (feature vectors)
-						extractor.compute( img1, keypoints_1, descriptors_1 );
-						extractor.compute( img2, keypoints_2, descriptors_2 );
+							//-- Step 2: Calculate descriptors (feature vectors)
+							extractor.compute( img1, keypoints_1, descriptors_1 );
+							extractor.compute( img2, keypoints_2, descriptors_2 );
 
-						//-- Step 3: Matching descriptor vectors using FLANN matcher
+							//-- Step 3: Matching descriptor vectors using FLANN matcher
 						
-						matcher.match( descriptors_1, descriptors_2, matches );
-	
+							matcher.match( descriptors_1, descriptors_2, matches );
+						}
+						catch(Exception ex)
+						{
+							printf("exception when extracting keypoints...\n");
+						}
+
+
 						for( int i = 0; i < keypoints_1.size(); i++ )
 						{
 							printf("keypoint1 %d (%f,%f)\n",i,keypoints_1[i].pt.x,keypoints_1[i].pt.y);
@@ -456,29 +465,43 @@ int main(int argc, char** argv)
 							int key2 = matches[i].trainIdx;
 		
 							printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-
-							if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness)
+							try
 							{
-								printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+								if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness_max)
+								{
+									printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+								}
+
+								if(abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness_max)
+								{
+									printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+								}
+
+								if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness_max
+									&& abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness_max
+									&& abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) > fuzziness_min
+									&& abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) > fuzziness_min)
+								{
+									good_matches.push_back( matches[i]);
+								}
 							}
-
-							if(abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
+							catch(Exception ex)
 							{
-								printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-							}
-
-							if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness && abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
-							{
-								good_matches.push_back( matches[i]);
+								printf("exception when finding good matches...\n");
 							}
 						}
 
 						//-- Draw only "good" matches
-						
-						drawMatches( img1, keypoints_1, img2, keypoints_2,
+						try
+						{
+							drawMatches( img1, keypoints_1, img2, keypoints_2,
 									good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
 									vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-
+						}
+						catch(Exception ex)
+						{
+							printf("exception when drawing matches...\n");
+						}
 						//-- Show detected matches
 						imshow( "Good Matches", img_matches );
 
