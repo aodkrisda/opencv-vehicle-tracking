@@ -1,22 +1,35 @@
 // BackgroundSubtraction.cpp : Defines the entry point for the console application.
 //
-
+#include <iostream>
 #include "stdafx.h"
-
+#include <opencv2\core\core.hpp>
 #include <opencv/cvaux.h>
 #include <opencv/cxmisc.h>
 #include <opencv/highgui.h>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/nonfree/features2d.hpp>
+#include <opencv2/gpu/gpu.hpp>
+#include <opencv2/legacy/legacy.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 
+using namespace std;
+using namespace cv;
+using namespace cv::gpu;
 
 //VARIABLES for CODEBOOK METHOD:
 CvBGCodeBookModel* model = 0;
 const int NCHANNELS = 3;
 bool ch[NCHANNELS]={true,true,true}; // This sets what channels should be adjusted for background bounds
 
+
+const bool DRAW_CONTOURS = false;
+const bool TRACK_MOTION = true;
+const bool USE_LUCAS_KANADE = false;
+const bool USE_ORB = true;
+const int MAX_CORNERS = 500;
+const bool DEBUG = true;
 
 // VARIABLES for FindContours
 int thresh = 200;
@@ -55,17 +68,137 @@ int main(int argc, char** argv)
 
 	printf("main started...\n");
 
+	
+	Mat img1 = imread( "image2b.jpg", CV_LOAD_IMAGE_GRAYSCALE );
+	Mat img2 = imread( "image1b.jpg", CV_LOAD_IMAGE_GRAYSCALE );
+	
+	//cv::gpu::GpuMat img1(cv::imread("image1.jpg", CV_LOAD_IMAGE_GRAYSCALE));
+    //cv::gpu::GpuMat img2(cv::imread("image2.jpg", CV_LOAD_IMAGE_GRAYSCALE));
+
+
+    if( !img1.data || !img2.data )
+	{ std::cout<< " --(!) Error reading images " << std::endl; return -1; }
+
+	//-- Step 1: Detect the keypoints using SURF Detector
+	int minHessian = 400;
+
+	SiftFeatureDetector detector( minHessian );
+
+	std::vector<KeyPoint> keypoints_1, keypoints_2;
+
+	detector.detect( img1, keypoints_1 );
+	detector.detect( img2, keypoints_2 );
+
+	
+
+	//-- Step 2: Calculate descriptors (feature vectors)
+	SiftDescriptorExtractor extractor;
+
+	Mat descriptors_1, descriptors_2;
+
+	extractor.compute( img1, keypoints_1, descriptors_1 );
+	extractor.compute( img2, keypoints_2, descriptors_2 );
+
+	//-- Step 3: Matching descriptor vectors using FLANN matcher
+	FlannBasedMatcher matcher;
+	std::vector< DMatch > matches;
+	matcher.match( descriptors_1, descriptors_2, matches );
+
+	double max_dist = 0; double min_dist = 100;
+
+	
+	for( int i = 0; i < keypoints_1.size(); i++ )
+	{
+		printf("keypoint1 %d (%f,%f)\n",i,keypoints_1[i].pt.x,keypoints_1[i].pt.y);
+	}
+	for( int i = 0; i < keypoints_2.size(); i++ )
+	{
+		printf("keypoint2 %d (%f,%f)\n",i,keypoints_2[i].pt.x,keypoints_2[i].pt.y);
+	}
+
+	//-- Quick calculation of max and min distances between keypoints
+	for( int i = 0; i < descriptors_1.rows; i++ )
+	{ 
+		double dist = matches[i].distance;
+		printf("%d:%d: %f",i,matches[i].queryIdx,dist);
+		if( dist < min_dist ) min_dist = dist;
+		if( dist > max_dist ) max_dist = dist;
+	}
+
+	printf("-- Max dist : %f \n", max_dist );
+	printf("-- Min dist : %f \n", min_dist );
+
+	//-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist )
+	//-- PS.- radiusMatch can also be used here.
+	std::vector< DMatch > good_matches;
+
+	/*
+	for( int i = 0; i < descriptors_1.rows; i++ )
+	{
+		if( matches[i].distance < 2*min_dist )
+		{
+			good_matches.push_back( matches[i]);
+		}
+	}
+	*/
+	int fuzziness = 30;
+	for( int i = 0; i < matches.size(); i++ )
+	{
+		int key1 = matches[i].queryIdx;
+		int key2 = matches[i].trainIdx;
+		
+		printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+
+		if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness)
+		{
+			printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+		}
+
+		if(abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
+		{
+			printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+		}
+
+		if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness && abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
+		{
+			good_matches.push_back( matches[i]);
+		}
+	}
+
+	//-- Draw only "good" matches
+	Mat img_matches;
+	drawMatches( img1, keypoints_1, img2, keypoints_2,
+				good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
+				vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+
+	//-- Show detected matches
+	imshow( "Good Matches", img_matches );
+
+	for( int i = 0; i < matches.size(); i++ )
+	{ printf( "-- Good Match [%d] Keypoint 1: %d  -- Keypoint 2: %d  \n", i, matches[i].queryIdx, matches[i].trainIdx ); }
+
+	waitKey(0);
+
+	return 0;
+	
+
+	
+
+
+
 
 	const char* filename = 0;
-    IplImage* rawImage = 0, *yuvImage = 0; //yuvImage is for codebook method
-	IplImage* justForeground = 0;
+    IplImage *rawImage = 0, *yuvImage = 0; //yuvImage is for codebook method
+	IplImage *justForeground = 0;
+	IplImage *justForegroundGray = 0;
     IplImage *ImaskCodeBook = 0,*ImaskCodeBookCC = 0;
 	IplImage *ImaskCodeBookInv = 0;
 	IplImage *ImaskCodeBookClosed = 0;
-	CvCapture* capture = 0;
+	IplImage *prevFrameMotionBlobs = 0;
+	CvCapture *capture = 0;
 
     int c, n, nframes = 0;
-    int nframesToLearnBG = 100; // originally 300
+    int nframesToLearnBG = 200; // originally 300
 
 
 	// Find Contours
@@ -77,11 +210,12 @@ int main(int argc, char** argv)
     model = cvCreateBGCodeBookModel();
     
     //Set color thresholds to default values
-    model->modMin[0] = 3;
-    model->modMin[1] = model->modMin[2] = 3;
-    model->modMax[0] = 10;
-    model->modMax[1] = model->modMax[2] = 10;
-    model->cbBounds[0] = model->cbBounds[1] = model->cbBounds[2] = 10;
+	// oringal min = 3, max = 10 --> now 2 and 14
+    model->modMin[0] = 2;
+    model->modMin[1] = model->modMin[2] = 2;
+    model->modMax[0] = 14;
+    model->modMax[1] = model->modMax[2] = 14;
+    model->cbBounds[0] = model->cbBounds[1] = model->cbBounds[2] = 14;
 
     bool pause = false;
     bool singlestep = false;
@@ -181,11 +315,13 @@ int main(int argc, char** argv)
             // CODEBOOK METHOD ALLOCATION
             yuvImage = cvCloneImage(rawImage);
 			justForeground = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, rawImage->nChannels );
+			justForegroundGray = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
             ImaskCodeBook = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
 			ImaskCodeBookInv = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
 			ImaskCodeBookClosed = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
             ImaskCodeBookCC = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
             canny_output = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+			
             cvSet(ImaskCodeBook,cvScalar(255));
             
             cvNamedWindow("Raw",1);
@@ -202,8 +338,12 @@ int main(int argc, char** argv)
 
 			// blur input image to reduce noise
 			cvSmooth(rawImage,rawImage);
+			
+			
 
-            cvCvtColor( rawImage, yuvImage, CV_BGR2YCrCb ); // converty to YUV
+
+
+            cvCvtColor( rawImage, yuvImage, CV_BGR2YCrCb ); // convert to YUV
 
             // build background model
             if( !pause && nframes-1 < nframesToLearnBG  )
@@ -247,25 +387,155 @@ int main(int argc, char** argv)
 
 
 				
+				// save image as jpg
+				if(nframes == nframesToLearnBG+51)
+					cvSaveImage("image1b.jpg",justForeground);
+				else if(nframes == nframesToLearnBG+52)
+					cvSaveImage("image2b.jpg",justForeground);
+				else if(nframes == nframesToLearnBG+53)
+					cvSaveImage("image3b.jpg",justForeground);
+				else if(nframes == nframesToLearnBG+54)
+					cvSaveImage("image4b.jpg",justForeground);
+				else if(nframes == nframesToLearnBG+55)
+					cvSaveImage("image5b.jpg",justForeground);
+				
+
+
+				/************************************/
+				/* Track Motion						*/
+				/************************************/
+				if(TRACK_MOTION && USE_LUCAS_KANADE)
+				{
+					if(prevFrameMotionBlobs)
+					{
+						cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
+						
+						/*
+						IplImage pf_gray = prev_frame_gray;
+						IplImage* prevFrameMotionBlobs = &pf_gray;
+						IplImage nf_gray = frame_gray;
+						IplImage* justForegroundGray = &nf_gray;
+						IplImage nf = roi_image;
+						IplImage* imgC = &nf;
+						*/
+
+						CvSize      img_sz    = cvGetSize( prevFrameMotionBlobs );
+						int         win_size = 10;
+				
+				
+						// The first thing we need to do is get the features
+						// we want to track.
+						//
+						IplImage* eig_image = cvCreateImage( img_sz, IPL_DEPTH_32F, 1 );
+						IplImage* tmp_image = cvCreateImage( img_sz, IPL_DEPTH_32F, 1 );
+						int              corner_count = MAX_CORNERS;
+						CvPoint2D32f* cornersA        = new CvPoint2D32f[ MAX_CORNERS ];
+						cvGoodFeaturesToTrack(
+							prevFrameMotionBlobs,
+							eig_image,
+							tmp_image,
+							cornersA,
+							&corner_count,
+							0.01,
+							5.0,
+							0,
+							3,
+							0,
+							0.04
+						);
+
+						cvFindCornerSubPix(
+							prevFrameMotionBlobs,
+							cornersA,
+							corner_count,
+							cvSize(win_size,win_size),
+							cvSize(-1,-1),
+							cvTermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS,20,0.03)
+						);
+
+						// Call the Lucas Kanade algorithm
+						//
+						char features_found[ MAX_CORNERS ];
+						float feature_errors[ MAX_CORNERS ];
+						CvSize pyr_sz = cvSize( prevFrameMotionBlobs->width+8, justForegroundGray->height/3 );
+						IplImage* pyrA = cvCreateImage( pyr_sz, IPL_DEPTH_32F, 1 );
+						IplImage* pyrB = cvCreateImage( pyr_sz, IPL_DEPTH_32F, 1 );
+						CvPoint2D32f* cornersB        = new CvPoint2D32f[ MAX_CORNERS ];
+				
+						cvCalcOpticalFlowPyrLK(
+							prevFrameMotionBlobs,
+							justForegroundGray,
+							pyrA,
+							pyrB,
+							cornersA,
+							cornersB,
+							corner_count,
+							cvSize( win_size,win_size ),
+							5,
+							features_found,
+							feature_errors,
+							cvTermCriteria( CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, .3 ),
+							0
+						);
+
+						// Now make some image of what we are looking at:
+						//
+						for( int i=0; i<corner_count; i++ )
+						{
+							if( features_found[i]==0|| feature_errors[i]>550 )
+							{
+								//  printf("Error is %f/n",feature_errors[i]);
+								continue;
+							}
+							//    printf("Got it/n");
+							CvPoint p0 = cvPoint(
+							cvRound( cornersA[i].x ),
+							cvRound( cornersA[i].y )
+							);
+							CvPoint p1 = cvPoint(
+							cvRound( cornersB[i].x ),
+							cvRound( cornersB[i].y )
+							);
+							cvLine( justForeground, p0, p1, CV_RGB(255,0,0),2 );
+						}
+
+						// save current frame as previous frame for next round
+						cvCopy(justForegroundGray,prevFrameMotionBlobs);
+					}
+					else
+					{
+						// create the first previous frame
+						prevFrameMotionBlobs = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+						cvCvtColor(justForeground,prevFrameMotionBlobs,CV_BGR2GRAY);
+					}
+				}
+
+				if(TRACK_MOTION && USE_ORB)
+				{
+					
+				}
 
 				/// Detect edges using canny
-				cvCanny( ImaskCodeBookClosed, canny_output, thresh, thresh*2, 3 );
+				if(DRAW_CONTOURS)
+				{
+					cvCanny( ImaskCodeBookClosed, canny_output, thresh, thresh*2, 3 );
 
-				/// Find contours
-				if( mem_storage == NULL )
-				{
-					mem_storage = cvCreateMemStorage(0);
-				}
-				else
-				{
-					cvClearMemStorage( mem_storage );
-				}
-				cvFindContours(canny_output, mem_storage, &contours);
+					/// Find contours
+					if( mem_storage == NULL )
+					{
+						mem_storage = cvCreateMemStorage(0);
+					}
+					else
+					{
+						cvClearMemStorage( mem_storage );
+					}
+					cvFindContours(canny_output, mem_storage, &contours);
 
-				/// Draw contours
-				if( contours )
-				{
-					cvDrawContours(justForeground,contours,cvScalarAll(255),cvScalarAll(255),1);
+					/// Draw contours
+					if( contours )
+					{
+						cvDrawContours(justForeground,contours,cvScalarAll(255),cvScalarAll(255),1);
+					}
 				}
             }
             //Display
