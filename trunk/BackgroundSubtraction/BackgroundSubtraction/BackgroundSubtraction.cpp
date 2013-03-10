@@ -27,6 +27,7 @@ bool ch[NCHANNELS]={true,true,true}; // This sets what channels should be adjust
 const bool DRAW_CONTOURS = false;
 const bool TRACK_MOTION = true;
 const bool USE_LUCAS_KANADE = false;
+const bool USE_SIFT = true;
 const bool USE_ORB = true;
 const int MAX_CORNERS = 500;
 const bool DEBUG = true;
@@ -68,123 +69,6 @@ int main(int argc, char** argv)
 
 	printf("main started...\n");
 
-	
-	Mat img1 = imread( "image2b.jpg", CV_LOAD_IMAGE_GRAYSCALE );
-	Mat img2 = imread( "image1b.jpg", CV_LOAD_IMAGE_GRAYSCALE );
-	
-	//cv::gpu::GpuMat img1(cv::imread("image1.jpg", CV_LOAD_IMAGE_GRAYSCALE));
-    //cv::gpu::GpuMat img2(cv::imread("image2.jpg", CV_LOAD_IMAGE_GRAYSCALE));
-
-
-    if( !img1.data || !img2.data )
-	{ std::cout<< " --(!) Error reading images " << std::endl; return -1; }
-
-	//-- Step 1: Detect the keypoints using SURF Detector
-	int minHessian = 400;
-
-	SiftFeatureDetector detector( minHessian );
-
-	std::vector<KeyPoint> keypoints_1, keypoints_2;
-
-	detector.detect( img1, keypoints_1 );
-	detector.detect( img2, keypoints_2 );
-
-	
-
-	//-- Step 2: Calculate descriptors (feature vectors)
-	SiftDescriptorExtractor extractor;
-
-	Mat descriptors_1, descriptors_2;
-
-	extractor.compute( img1, keypoints_1, descriptors_1 );
-	extractor.compute( img2, keypoints_2, descriptors_2 );
-
-	//-- Step 3: Matching descriptor vectors using FLANN matcher
-	FlannBasedMatcher matcher;
-	std::vector< DMatch > matches;
-	matcher.match( descriptors_1, descriptors_2, matches );
-
-	double max_dist = 0; double min_dist = 100;
-
-	
-	for( int i = 0; i < keypoints_1.size(); i++ )
-	{
-		printf("keypoint1 %d (%f,%f)\n",i,keypoints_1[i].pt.x,keypoints_1[i].pt.y);
-	}
-	for( int i = 0; i < keypoints_2.size(); i++ )
-	{
-		printf("keypoint2 %d (%f,%f)\n",i,keypoints_2[i].pt.x,keypoints_2[i].pt.y);
-	}
-
-	//-- Quick calculation of max and min distances between keypoints
-	for( int i = 0; i < descriptors_1.rows; i++ )
-	{ 
-		double dist = matches[i].distance;
-		printf("%d:%d: %f",i,matches[i].queryIdx,dist);
-		if( dist < min_dist ) min_dist = dist;
-		if( dist > max_dist ) max_dist = dist;
-	}
-
-	printf("-- Max dist : %f \n", max_dist );
-	printf("-- Min dist : %f \n", min_dist );
-
-	//-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist )
-	//-- PS.- radiusMatch can also be used here.
-	std::vector< DMatch > good_matches;
-
-	/*
-	for( int i = 0; i < descriptors_1.rows; i++ )
-	{
-		if( matches[i].distance < 2*min_dist )
-		{
-			good_matches.push_back( matches[i]);
-		}
-	}
-	*/
-	int fuzziness = 30;
-	for( int i = 0; i < matches.size(); i++ )
-	{
-		int key1 = matches[i].queryIdx;
-		int key2 = matches[i].trainIdx;
-		
-		printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-
-		if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness)
-		{
-			printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-		}
-
-		if(abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
-		{
-			printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-		}
-
-		if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness && abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
-		{
-			good_matches.push_back( matches[i]);
-		}
-	}
-
-	//-- Draw only "good" matches
-	Mat img_matches;
-	drawMatches( img1, keypoints_1, img2, keypoints_2,
-				good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
-				vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-
-	//-- Show detected matches
-	imshow( "Good Matches", img_matches );
-
-	for( int i = 0; i < matches.size(); i++ )
-	{ printf( "-- Good Match [%d] Keypoint 1: %d  -- Keypoint 2: %d  \n", i, matches[i].queryIdx, matches[i].trainIdx ); }
-
-	waitKey(0);
-
-	return 0;
-	
-
-	
-
-
 
 
 	const char* filename = 0;
@@ -196,6 +80,7 @@ int main(int argc, char** argv)
 	IplImage *ImaskCodeBookClosed = 0;
 	IplImage *prevFrameMotionBlobs = 0;
 	CvCapture *capture = 0;
+						
 
     int c, n, nframes = 0;
     int nframesToLearnBG = 200; // originally 300
@@ -205,6 +90,21 @@ int main(int argc, char** argv)
 	IplImage* canny_output = 0;
 	CvMemStorage* 	mem_storage = NULL;
 	CvSeq* contours = 0;
+
+
+	// SIFT Vars
+	Mat img1;
+	Mat img2;
+	int minHessian = 400;
+	SiftFeatureDetector detector( minHessian );
+	std::vector<KeyPoint> keypoints_1, keypoints_2;
+	SiftDescriptorExtractor extractor;
+	Mat descriptors_1, descriptors_2;
+	FlannBasedMatcher matcher;
+	std::vector< DMatch > matches;
+	std::vector< DMatch > good_matches;
+	int fuzziness = 30;
+	Mat img_matches;
 
 
     model = cvCreateBGCodeBookModel();
@@ -510,9 +410,92 @@ int main(int argc, char** argv)
 					}
 				}
 
-				if(TRACK_MOTION && USE_ORB)
+				if(TRACK_MOTION && USE_SIFT)
 				{
-					
+					if(prevFrameMotionBlobs)
+					{
+						keypoints_1.clear();
+						keypoints_2.clear();
+						matches.clear();
+						good_matches.clear();
+
+						cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
+
+						img1 = Mat(prevFrameMotionBlobs);
+						img2 = Mat(justForegroundGray);
+	
+						//-- Step 1: Detect the keypoints using SURF Detector
+						detector.detect( img1, keypoints_1 );
+						detector.detect( img2, keypoints_2 );
+
+						//-- Step 2: Calculate descriptors (feature vectors)
+						extractor.compute( img1, keypoints_1, descriptors_1 );
+						extractor.compute( img2, keypoints_2, descriptors_2 );
+
+						//-- Step 3: Matching descriptor vectors using FLANN matcher
+						
+						matcher.match( descriptors_1, descriptors_2, matches );
+	
+						for( int i = 0; i < keypoints_1.size(); i++ )
+						{
+							printf("keypoint1 %d (%f,%f)\n",i,keypoints_1[i].pt.x,keypoints_1[i].pt.y);
+						}
+						for( int i = 0; i < keypoints_2.size(); i++ )
+						{
+							printf("keypoint2 %d (%f,%f)\n",i,keypoints_2[i].pt.x,keypoints_2[i].pt.y);
+						}
+
+
+						//-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist )
+						//-- PS.- radiusMatch can also be used here.
+
+						
+						for( int i = 0; i < matches.size(); i++ )
+						{
+							int key1 = matches[i].queryIdx;
+							int key2 = matches[i].trainIdx;
+		
+							printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+
+							if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness)
+							{
+								printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+							}
+
+							if(abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
+							{
+								printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+							}
+
+							if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness && abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness)
+							{
+								good_matches.push_back( matches[i]);
+							}
+						}
+
+						//-- Draw only "good" matches
+						
+						drawMatches( img1, keypoints_1, img2, keypoints_2,
+									good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
+									vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+
+						//-- Show detected matches
+						imshow( "Good Matches", img_matches );
+
+						for( int i = 0; i < matches.size(); i++ )
+						{ 
+							printf( "-- Good Match [%d] Keypoint 1: %d  -- Keypoint 2: %d  \n", i, matches[i].queryIdx, matches[i].trainIdx ); 
+						}
+						
+						// save current frame as previous frame for next round
+						cvCopy(justForegroundGray,prevFrameMotionBlobs);
+					}
+					else
+					{
+						// create the first previous frame
+						prevFrameMotionBlobs = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+						cvCvtColor(justForeground,prevFrameMotionBlobs,CV_BGR2GRAY);
+					}
 				}
 
 				/// Detect edges using canny
