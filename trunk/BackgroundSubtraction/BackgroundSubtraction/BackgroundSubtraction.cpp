@@ -154,10 +154,13 @@ int main(int argc, char** argv)
 	int count2 = 0;
 	contours_remember1 = contours1;
 	contours_remember2 = contours2;
-	double bestMatchesVal[1000];
-	int bestMatchesId[1000];
+	double bestMatchesVal[100];
+	int bestMatchesId[100];
+	CvScalar prevFrameColors[100];
+	CvScalar curFrameColors[100];
 	CvRect rect1;
 	CvRect rect2;
+	CvScalar color;
 
 	// flakus weights
 	float moment_weight = 1;
@@ -312,10 +315,12 @@ int main(int argc, char** argv)
     }
 
 	cv::VideoCapture camera;
-	camera.open("http://itwebcamcp700.fullerton.edu/mjpg/video.mjpg");
+	//camera.open("http://itwebcamcp700.fullerton.edu/mjpg/video.mjpg");
 	//camera.open("http://cam1.brentwood-tn.org/mjpg/video.mjpg");
 	//camera.open("http://216.8.159.21/mjpg/video.mjpg");
 	//camera.open("http://cyclops.american.edu/mjpg/video.mjpg");
+	camera.open("http://85.90.4.70/mjpg/video.mjpg?camera=1"); // switzerland
+	
 	
 	/*
     if( !filename )
@@ -671,9 +676,7 @@ int main(int argc, char** argv)
 				{
 					if(prevFrameMotionBlobs)
 					{
-						//cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
-
-						
+						cvCopy(rawImage,output);
 
 						// get a list of blobs (contours)
 						cvCanny(ImaskCodeBookClosed, canny_output1, thresh, thresh*2, 3 );
@@ -706,18 +709,14 @@ int main(int argc, char** argv)
 						contours_remember1 = contours1;
 						contours_remember2 = contours2;
 
-						fill_n(bestMatchesVal, 1000, 999999999);
-						fill_n(bestMatchesId, 1000, -1);
+						fill_n(bestMatchesVal, 100, 999999999);
+						fill_n(bestMatchesId, 100, -1);
 			
 						//printf("contour1 size: %d\n",contours1->first->count);
 
 						for (; contours1 != 0; contours1 = contours1->h_next)
 						{
-							count1++;
-
-							// loop label counter every 1000 objects
-							if(count1 >= 1000)
-								count1 = 1;
+							
 
 							rect1 = cvBoundingRect( contours1);
 
@@ -726,31 +725,24 @@ int main(int argc, char** argv)
 								printf("ignoring small blob...%d\n",count1);
 								continue;
 							}
-							//if(count1 == 5)
-							//{
-								cvPutText(prevFrameRaw,itoa(count1,buffer,10),Point(rect1.x,rect1.y), &font, CV_RGB(255, 255, 255));
-								cvDrawContours(prevFrameRaw,contours1,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-							//}
+
+							cvPutText(prevFrameRaw,itoa(count1,buffer,10),Point(rect1.x,rect1.y), &font, CV_RGB(255, 255, 255));
+							//cvDrawContours(prevFrameRaw,contours1,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
 				
 							for(; contours2 != 0; contours2 = contours2->h_next)
 							{
-								count2++;
-
 								rect2 = cvBoundingRect( contours2);
-
 								if(rect2.width * rect2.height < min_blob_area)
 								{
 									printf("throwing out small blob....%d\n",count2);
 									continue;
 								}
 
-								//if(count2 == 4)
-								//{
-									cvPutText(rawImage,itoa(count2,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(255, 255, 255));
-									cvDrawContours(rawImage,contours2,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-								//}
+								
+								//cvPutText(output,itoa(count2,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(255, 255, 255));
+								
 					
-									// log((moment_weight)moment difference) + log((size_weight)size difference) + log((location_weight)location difference)
+								// log((moment_weight)moment difference) + log((size_weight)size difference) + log((location_weight)location difference)
 								compare_result =	log(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))) +
 													log((size_weight * (1+abs(rect1.width*rect1.height - rect2.width*rect2.height)))) +
 													log((proximity_weight*(1+(abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y)))));
@@ -759,21 +751,47 @@ int main(int argc, char** argv)
 								{
 									bestMatchesVal[count2] = compare_result;
 									bestMatchesId[count2] = count1;
+									curFrameColors[count2] = prevFrameColors[count1];
 								}
 
 								printf("[%d][%d] compare result: %f\n",count1,count2,compare_result);
 								printf("area diff: %d | %d | %d\n",rect1.width*rect1.height,rect2.width*rect2.height,abs(rect1.width*rect1.height - rect2.width*rect2.height));
 								printf("location diff: %d | %d | %d\n",abs(rect1.x-rect2.x),abs(rect1.y-rect2.y),abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y));
-
+								count2++;
 							}
 							count2 = 0;
 							contours2 = contours_remember2;
+							count1++;
 						}
-						//count1 = 0;
+						count1 = 0;
 						contours1 = contours_remember1;			
 			
-			
-						for(int m=0;m<1000;m++)
+
+
+						// print contours with best match colors
+						count2=0;
+						for(; contours2 != 0; contours2 = contours2->h_next)
+						{
+							rect2 = cvBoundingRect( contours2);
+							if(rect2.width * rect2.height < min_blob_area)
+							{
+								printf("throwing out small blob....%d\n",count2);
+								continue;
+							}
+
+							if(curFrameColors[count2].val == CV_RGB(0,0,0).val)
+							{
+								curFrameColors[count2] = CV_RGB( rand()&255, rand()&255, rand()&255 );
+							}
+
+							cvPutText(output,itoa(count2,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(255, 255, 255));
+							cvDrawContours(output,contours2,curFrameColors[count2],curFrameColors[count2],-1,CV_FILLED);
+							
+							count2++;
+						}
+						
+						
+						for(int m=0;m<100;m++)
 						{
 							if(bestMatchesId[m] != -1)
 							{
@@ -783,7 +801,7 @@ int main(int argc, char** argv)
 
 
 						//cvDrawContours(r2,contours2,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
-						cvShowImage("current raw",rawImage);
+						cvShowImage("current raw",output);
 						//cvDrawContours(r1,contours1,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
 						cvShowImage("prev raw",prevFrameRaw);
 
@@ -792,6 +810,13 @@ int main(int argc, char** argv)
 						// save current frame as previous frame for next round
 						cvCopy(ImaskCodeBookClosed,prevFrameMotionBlobs);
 						cvCopy(rawImage,prevFrameRaw);
+						
+						// copy colors
+						for(int c=0;c<100;c++)
+						{
+							prevFrameColors[c] = curFrameColors[c];
+							curFrameColors[c] = CV_RGB(0,0,0);
+						}
 					}
 					else
 					{
