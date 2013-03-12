@@ -1,7 +1,7 @@
-﻿Build started 3/11/2013 9:02:15 PM.
+﻿Build started 3/11/2013 10:51:26 PM.
      1>Project "C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\BackgroundSubtraction\BackgroundSubtraction.vcxproj" on node 2 (build target(s)).
      1>InitializeBuildStatus:
-         Touching "Debug\BackgroundSubtraction.unsuccessfulbuild".
+         Creating "Debug\BackgroundSubtraction.unsuccessfulbuild" because "AlwaysCreate" was specified.
        ClCompile:
          All outputs are up-to-date.
          C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Yu"StdAfx.h" /Fp"Debug\BackgroundSubtraction.pch" /Fo"Debug\\" /Fd"Debug\vc100.pdb" /Gd /TP /analyze- /errorReport:prompt BackgroundSubtraction.cpp
@@ -12,25 +12,21 @@
                  c:\program files (x86)\microsoft visual studio 10.0\vc\include\string.h(105) : see declaration of 'strcpy'
      1>c:\program files\opencv2.4.3\build\include\opencv2\legacy\blobtrack.hpp(256): warning C4996: 'strcat': This function or variable may be unsafe. Consider using strcat_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
                  c:\program files (x86)\microsoft visual studio 10.0\vc\include\string.h(110) : see declaration of 'strcat'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(228): warning C4018: '<' : signed/unsigned mismatch
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(249): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(250): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(252): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(320): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(338): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(467): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(304): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
                  c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdio.h(325) : see declaration of 'sscanf'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(877): warning C4018: '<' : signed/unsigned mismatch
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(898): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(899): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(901): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(995): warning C4018: '<' : signed/unsigned mismatch
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(129): warning C4101: 'PointArray2D32f' : unreferenced local variable
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(128): warning C4101: 'PointArray' : unreferenced local variable
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(126): warning C4101: 'stor' : unreferenced local variable
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(127): warning C4101: 'box' : unreferenced local variable
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(731): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(749): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(861): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(882): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(883): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(885): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(979): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(132): warning C4101: 'PointArray2D32f' : unreferenced local variable
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(131): warning C4101: 'PointArray' : unreferenced local variable
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(129): warning C4101: 'stor' : unreferenced local variable
+     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(130): warning C4101: 'box' : unreferenced local variable
        ManifestResourceCompile:
          All outputs are up-to-date.
        Link:
@@ -50,4 +46,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:03.22
+Time Elapsed 00:00:02.83

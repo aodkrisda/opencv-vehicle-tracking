@@ -27,8 +27,9 @@ bool ch[NCHANNELS]={true,true,true}; // This sets what channels should be adjust
 const bool DRAW_CONTOURS = false;
 const bool TRACK_MOTION = true;
 const bool USE_LUCAS_KANADE = false;
-const bool USE_SIFT = true;
 const int MAX_CORNERS = 500;
+const bool USE_SIFT = false;
+const bool BLOB_COMPARE = true;
 const bool DEBUG = true;
 
 // VARIABLES for FindContours
@@ -78,6 +79,8 @@ int main(int argc, char** argv)
 	IplImage *ImaskCodeBookInv = 0;
 	IplImage *ImaskCodeBookClosed = 0;
 	IplImage *prevFrameMotionBlobs = 0;
+	IplImage *prevFrameRaw = 0;
+	IplImage *output = 0;
 	CvCapture *capture = 0;
 						
 
@@ -144,16 +147,27 @@ int main(int argc, char** argv)
     model->cbBounds[0] = model->cbBounds[1] = model->cbBounds[2] = 14;
 
 
+
+	// flakus blob motion
+	double compare_result;
+	int count1 = 0;
+	int count2 = 0;
+	contours_remember1 = contours1;
+	contours_remember2 = contours2;
+	double bestMatchesVal[1000];
+	int bestMatchesId[1000];
+	CvRect rect1;
+	CvRect rect2;
+
 	// flakus weights
 	float moment_weight = 1;
 	float size_weight = 2;
 	float proximity_weight = 10;
 	float min_blob_area = 26;
 
+
+	/*
 	// find matching contours for keypoints
-
-
-
 	IplImage *b1 = cvLoadImage("blobs6.jpg");
 	IplImage *b2 = cvLoadImage("blobs7.jpg");
 	IplImage *b3 = cvLoadImage("blobs8.jpg");
@@ -176,6 +190,10 @@ int main(int argc, char** argv)
 	
 	output = cvCreateImage(cvGetSize(r1),IPL_DEPTH_8U,3);
 	cvCvtColor(f1,prevFrameMotionBlobs,CV_BGR2GRAY);
+	*/
+
+	
+	/*
 
 	if(TRACK_MOTION && USE_SIFT)
 	{
@@ -210,7 +228,7 @@ int main(int argc, char** argv)
 				printf("exception when extracting keypoints...%s\n",ex.msg);
 			}
 
-			/*
+			
 			for( int i = 0; i < keypoints_1.size(); i++ )
 			{
 				printf("keypoint1 %d (%f,%f)\n",i,keypoints_1[i].pt.x,keypoints_1[i].pt.y);
@@ -219,7 +237,7 @@ int main(int argc, char** argv)
 			{
 				printf("keypoint2 %d (%f,%f)\n",i,keypoints_2[i].pt.x,keypoints_2[i].pt.y);
 			}
-			*/
+			
 
 			//-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist )
 			//-- PS.- radiusMatch can also be used here.
@@ -233,7 +251,7 @@ int main(int argc, char** argv)
 				//printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
 				try
 				{
-					/*
+					
 					if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness_max)
 					{
 						printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
@@ -243,7 +261,7 @@ int main(int argc, char** argv)
 					{
 						printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
 					}
-					*/
+					
 
 					// calculate distance
 					x_dist = abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x);
@@ -263,174 +281,6 @@ int main(int argc, char** argv)
 					printf("exception when finding good matches...\n");
 				}
 			}
-						
-
-						
-			// get a list of blobs (contours)
-			cvCanny( b2, canny_output1, thresh, thresh*2, 3 );
-			if( mem_storage1 == NULL )
-			{
-				mem_storage1 = cvCreateMemStorage(0);
-			}
-			else
-			{
-				cvClearMemStorage( mem_storage1 );
-			}
-			cvFindContours(canny_output1, mem_storage1, &contours1,88,CV_RETR_EXTERNAL);
-
-			cvCanny( b3, canny_output2, thresh, thresh*2, 3 );
-			if( mem_storage2 == NULL )
-			{
-				mem_storage2 = cvCreateMemStorage(0);
-			}
-			else
-			{
-				cvClearMemStorage( mem_storage2 );
-			}
-			cvFindContours(canny_output2, mem_storage2, &contours2,88,CV_RETR_EXTERNAL);
-
-
-			
-
-			double compare_result;
-			int count1 = 0;
-			int count2 = 0;
-			contours_remember1 = contours1;
-			contours_remember2 = contours2;
-
-			
-			double bestMatchesVal[100];
-			fill_n(bestMatchesVal, 100, 999999999);
-			int bestMatchesId[100];
-			fill_n(bestMatchesId, 100, -1);
-			
-
-			for (; contours1 != 0; contours1 = contours1->h_next)
-			{
-				count1++;
-				CvRect rect1 = cvBoundingRect( contours1);
-
-				if(rect1.width * rect1.height < min_blob_area)
-				{
-					printf("ignoring small blob...%d\n",count1);
-					continue;
-				}
-				//if(count1 == 5)
-				//{
-					cvPutText(r2,itoa(count1,buffer,10),Point(rect1.x+count1,rect1.y-count1*2), &font, CV_RGB(255, 255, 255));
-					cvDrawContours(r2,contours1,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-				//}
-				
-				for(; contours2 != 0; contours2 = contours2->h_next)
-				{
-					count2++;
-
-					CvRect rect2 = cvBoundingRect( contours2);
-
-					if(rect2.width * rect2.height < min_blob_area)
-					{
-						printf("throwing out small blob...%d\n",count2);
-						continue;
-					}
-
-					//if(count2 == 4)
-					//{
-						cvPutText(r3,itoa(count2,buffer,10),Point(rect2.x+count2,rect2.y-count2*2), &font, CV_RGB(255, 255, 255));
-						cvDrawContours(r3,contours2,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-					//}
-					
-						// (moment_weight)moment difference * (size_weight)size difference * (location_weight)location difference
-					compare_result =	(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))) *
-										(size_weight * (1+abs(rect1.width*rect1.height - rect2.width*rect2.height))) *
-										(proximity_weight*(1+(abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y))));
-
-					if(compare_result < bestMatchesVal[count2])
-					{
-						bestMatchesVal[count2] = compare_result;
-						bestMatchesId[count2] = count1;
-					}
-					printf("[%d][%d] compare result: %f\n",count1,count2,compare_result);
-					printf("area diff: %d | %d | %d\n",rect1.width*rect1.height,rect2.width*rect2.height,abs(rect1.width*rect1.height - rect2.width*rect2.height));
-					printf("location diff: %d | %d | %d\n",abs(rect1.x-rect2.x),abs(rect1.y-rect2.y),abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y));
-
-				}
-				count2 = 0;
-				contours2 = contours_remember2;
-			}
-			contours1 = contours_remember1;			
-			
-			
-			for(int m=0;m<100;m++)
-			{
-				if(bestMatchesId[m] != -1)
-					printf("best match for %d is %d with score of %f\n",m,bestMatchesId[m],bestMatchesVal[m]);
-			}
-
-
-			//cvDrawContours(r2,contours2,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
-			cvShowImage("r2",r3);
-			//cvDrawContours(r1,contours1,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
-			cvShowImage("r1",r2);
-
-			cvWaitKey(0);
-
-			/*
-
-			vector<RotatedRect> minEllipse( contours->total );
-
-			if( contours )
-			{
-				int contour_counter = 0;
-				for (; contours != 0; contours = contours->h_next)
-				{
-					for( int i = 0; i < good_matches.size(); i++ )
-					{
-						if(cvPointPolygonTest(contours,keypoints_2[good_matches[i].trainIdx].pt,0) > 0)
-						{
-							cvDrawContours(output, contours, CV_RGB(255,0,0), CV_RGB(255,0,0), -1, CV_FILLED, 8, cvPoint(0,0));
-							break;
-						}
-						else
-						{
-							//cvDrawContours(justForeground, contours, CV_RGB(0,255,0), CV_RGB(0,255,0), -1, CV_FILLED, 8, cvPoint(0,0));
-						}
-					}
-				}
-
-			}
-						
-			//cvDrawContours(justForeground, contours, CV_RGB(255,0,0), CV_RGB(255,0,0), -1, CV_FILLED, 8, cvPoint(0,0));
-						
-			// for each good match, identify the blob the match pertains to
-
-						
-
-
-			//-- Draw only "good" matches
-						
-			try
-			{
-				drawMatches( img1, keypoints_1, img2, keypoints_2,
-						good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
-						vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-				imshow( "Matches", img_matches );
-			}
-			catch(Exception ex)
-			{
-				printf("exception when drawing matches...\n");
-			}
-						
-			*/
-
-			/*
-			for( int i = 0; i < matches.size(); i++ )
-			{ 
-				printf( "-- Good Match [%d] Keypoint 1: %d  -- Keypoint 2: %d  \n", i, matches[i].queryIdx, matches[i].trainIdx ); 
-			}
-			*/
-						
-			// save current frame as previous frame for next round
-			//cvCopy(justForegroundGray,prevFrameMotionBlobs);
 		}
 	}
 
@@ -439,21 +289,8 @@ int main(int argc, char** argv)
 	cvShowImage("output",output);
 	cvWaitKey(0);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 	return 0;
-
+	*/
 
 
     bool pause = false;
@@ -565,6 +402,9 @@ int main(int argc, char** argv)
 			ImaskCodeBookClosed = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
             ImaskCodeBookCC = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
             canny_output = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+			canny_output1 = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+			canny_output2 = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+			output = cvCreateImage(cvGetSize(rawImage),IPL_DEPTH_8U,3);
 			
             cvSet(ImaskCodeBook,cvScalar(255));
             
@@ -825,6 +665,150 @@ int main(int argc, char** argv)
 						cvCvtColor(justForeground,prevFrameMotionBlobs,CV_BGR2GRAY);
 					}
 				}
+
+
+				if(TRACK_MOTION && BLOB_COMPARE)
+				{
+					if(prevFrameMotionBlobs)
+					{
+						//cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
+
+						
+
+						// get a list of blobs (contours)
+						cvCanny(ImaskCodeBookClosed, canny_output1, thresh, thresh*2, 3 );
+						if( mem_storage1 == NULL )
+						{
+							mem_storage1 = cvCreateMemStorage(0);
+						}
+						else
+						{
+							cvClearMemStorage( mem_storage1 );
+						}
+						cvFindContours(canny_output1, mem_storage1, &contours1,88,CV_RETR_EXTERNAL);
+
+						cvCanny(prevFrameMotionBlobs, canny_output2, thresh, thresh*2, 3 );
+						if( mem_storage2 == NULL )
+						{
+							mem_storage2 = cvCreateMemStorage(0);
+						}
+						else
+						{
+							cvClearMemStorage( mem_storage2 );
+						}
+						cvFindContours(canny_output2, mem_storage2, &contours2,88,CV_RETR_EXTERNAL);
+
+
+						//cvShowImage("canny 1",canny_output1);
+						//cvShowImage("canny 2",canny_output2);
+						//cvWaitKey(0);
+
+						contours_remember1 = contours1;
+						contours_remember2 = contours2;
+
+						fill_n(bestMatchesVal, 1000, 999999999);
+						fill_n(bestMatchesId, 1000, -1);
+			
+						//printf("contour1 size: %d\n",contours1->first->count);
+
+						for (; contours1 != 0; contours1 = contours1->h_next)
+						{
+							count1++;
+
+							// loop label counter every 1000 objects
+							if(count1 >= 1000)
+								count1 = 1;
+
+							rect1 = cvBoundingRect( contours1);
+
+							if(rect1.width * rect1.height < min_blob_area)
+							{
+								printf("ignoring small blob...%d\n",count1);
+								continue;
+							}
+							//if(count1 == 5)
+							//{
+								cvPutText(prevFrameRaw,itoa(count1,buffer,10),Point(rect1.x,rect1.y), &font, CV_RGB(255, 255, 255));
+								cvDrawContours(prevFrameRaw,contours1,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
+							//}
+				
+							for(; contours2 != 0; contours2 = contours2->h_next)
+							{
+								count2++;
+
+								rect2 = cvBoundingRect( contours2);
+
+								if(rect2.width * rect2.height < min_blob_area)
+								{
+									printf("throwing out small blob....%d\n",count2);
+									continue;
+								}
+
+								//if(count2 == 4)
+								//{
+									cvPutText(rawImage,itoa(count2,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(255, 255, 255));
+									cvDrawContours(rawImage,contours2,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
+								//}
+					
+									// log((moment_weight)moment difference) + log((size_weight)size difference) + log((location_weight)location difference)
+								compare_result =	log(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))) +
+													log((size_weight * (1+abs(rect1.width*rect1.height - rect2.width*rect2.height)))) +
+													log((proximity_weight*(1+(abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y)))));
+
+								if(compare_result < bestMatchesVal[count2])
+								{
+									bestMatchesVal[count2] = compare_result;
+									bestMatchesId[count2] = count1;
+								}
+
+								printf("[%d][%d] compare result: %f\n",count1,count2,compare_result);
+								printf("area diff: %d | %d | %d\n",rect1.width*rect1.height,rect2.width*rect2.height,abs(rect1.width*rect1.height - rect2.width*rect2.height));
+								printf("location diff: %d | %d | %d\n",abs(rect1.x-rect2.x),abs(rect1.y-rect2.y),abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y));
+
+							}
+							count2 = 0;
+							contours2 = contours_remember2;
+						}
+						//count1 = 0;
+						contours1 = contours_remember1;			
+			
+			
+						for(int m=0;m<1000;m++)
+						{
+							if(bestMatchesId[m] != -1)
+							{
+								printf("best match for %d is %d with score of %f\n",m,bestMatchesId[m],bestMatchesVal[m]);
+							}
+						}
+
+
+						//cvDrawContours(r2,contours2,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
+						cvShowImage("current raw",rawImage);
+						//cvDrawContours(r1,contours1,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
+						cvShowImage("prev raw",prevFrameRaw);
+
+						cvWaitKey(0);
+
+						// save current frame as previous frame for next round
+						cvCopy(ImaskCodeBookClosed,prevFrameMotionBlobs);
+						cvCopy(rawImage,prevFrameRaw);
+					}
+					else
+					{
+						// create the first previous frame
+						prevFrameMotionBlobs = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+						prevFrameRaw = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 3 );
+						cvCopy(ImaskCodeBookClosed,prevFrameMotionBlobs);
+						cvCopy(rawImage,prevFrameRaw);
+					}
+				}
+
+
+
+
+
+
+
 
 				if(TRACK_MOTION && USE_SIFT)
 				{
