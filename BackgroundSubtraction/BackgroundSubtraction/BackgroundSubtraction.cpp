@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <opencv2/video/tracking.hpp>
 
 using namespace std;
 using namespace cv;
@@ -39,10 +40,6 @@ int max_thresh = 255;
 cv::RNG rng(12345);
 
 
-
-
-
-
 const char* filename = 0;
 
 bool pause = false;
@@ -62,7 +59,7 @@ CvCapture *capture = 0;
 cv::Mat_<cv::Vec3b> image;						
 
 int c, n, nframes = 0;
-int nframesToLearnBG = 150; // originally 300
+int nframesToLearnBG = 300; // originally 300
 
 
 // Find Contours
@@ -131,10 +128,10 @@ CvScalar color;
 // flakus weights
 float moment_weight = 1;
 float size_weight = 2;
-float proximity_weight = 10;
-float min_blob_area = 26;
-
-
+float proximity_weight = 20;
+float min_blob_area = 150;
+int blob_counter = 0;
+float blob_compare_threshold = 15;
 
 void processFrame();
 
@@ -164,14 +161,56 @@ void help()
         );
 }
 
+
+void drawOptFlowMap(const Mat& flow, Mat& cflowmap, int step,double scale, const Scalar& color)
+{
+	for(int y = 0; y < cflowmap.rows; y += step)
+	    for(int x = 0; x < cflowmap.cols; x += step)
+	    {
+	        const Point2f& fxy = flow.at<Point2f>(y, x);
+	        line(cflowmap, Point(x,y), Point(cvRound(x+fxy.x), cvRound(y+fxy.y)),
+	                color);
+	        circle(cflowmap, Point(x,y), 2, color, -1);
+	    }
+}
+
 int main(int argc, char** argv)
 {
 
 	printf("opening remote webcam...\n");
 
-    
+    VideoCapture camera;
+/*
+// farneback example - dense optical flow map
 
-	VideoCapture camera;
+	
+	camera.open("http://itwebcamcp700.fullerton.edu/mjpg/video.mjpg");
+
+
+
+Mat prevgray, gray, flow, cflow, frame;
+namedWindow("flow", 1);
+   
+for(;;)
+{
+    camera >> frame;
+	cvtColor(frame, gray, CV_BGR2GRAY);
+      
+	if( prevgray.data )
+	{
+		calcOpticalFlowFarneback(prevgray, gray, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
+		cvtColor(prevgray, cflow, CV_GRAY2BGR);
+		drawOptFlowMap(flow, cflow, 16, 1.5, CV_RGB(0, 255, 0));
+		imshow("flow", cflow);
+	}
+	if(waitKey(30)>=0)
+		break;
+	std::swap(prevgray, gray);
+}
+return 0;
+*/
+
+
 
 	if(LIVE_DEMO)
 	{
@@ -290,7 +329,7 @@ int main(int argc, char** argv)
 	else
 	{
 		capture = cvCaptureFromAVI("output1.avi"); 
-
+		IplImage *resized = 0;
 		for(;;)
 		{
 			if( !pause )
@@ -306,6 +345,9 @@ int main(int argc, char** argv)
 
 				// crop input image to just roi
 				ipl_image = image(roi);
+
+				resized = cvCreateImage( cvSize(320,120),8, 3 );
+				cvResize(&ipl_image,resized);
 
 				rawImage = &ipl_image;
 
@@ -389,7 +431,7 @@ void processFrame()
 		//cvPyrMeanShiftFiltering(rawImage,rawImage,10,10,1);
 
 		// blur input image to reduce noise
-		cvSmooth(rawImage,rawImage);
+		//cvSmooth(rawImage,rawImage);
 			
 
         cvCvtColor( rawImage, yuvImage, CV_BGR2YCrCb ); // convert to YUV
@@ -399,8 +441,10 @@ void processFrame()
             cvBGCodeBookUpdate( model, yuvImage );
 
         if( nframes-1 == nframesToLearnBG  )
+		{
+			printf("codebook stale entries cleared\n");
             cvBGCodeBookClearStale( model, model->t/2 );
-            
+		}   
         //Find the foreground if any
         if( nframes-1 >= nframesToLearnBG  )
         {
@@ -409,19 +453,21 @@ void processFrame()
 
 			if(nframes % 100 == 0)
 			{
-				printf("codebook stale entries cleared\n");
-				cvBGCodeBookClearStale(model,model->t/2);
+				//printf("codebook stale entries cleared\n");
+				//cvBGCodeBookClearStale(model,model->t/2);
 			}
 			cvCopy(ImaskCodeBook,ImaskCodeBookClosed);
-				
+			
+			
+			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
-			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
-				
-			/*
+			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
+			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
+			
 			// get a list of blobs (contours)
 			cvCanny( ImaskCodeBookClosed, canny_output, thresh, thresh*2, 3 );
 
@@ -434,12 +480,12 @@ void processFrame()
 			{
 				cvClearMemStorage( mem_storage );
 			}
-			cvFindContours(canny_output, mem_storage, &contours);
+			cvFindContours(canny_output, mem_storage, &contours,88,CV_RETR_EXTERNAL);
 
 			// fill in holes within each blob
 			cvDrawContours(ImaskCodeBookClosed,contours,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED, 8, cvPoint(0,0));
-			*/
-
+			
+			
 
 			// invert the mask
 			for(int i=0;i<ImaskCodeBookClosed->height;i++)
@@ -454,7 +500,7 @@ void processFrame()
             //cvSegmentFGMask( ImaskCodeBookCC );
 
 
-				
+			/*	
 			// save image as jpg
 			if(nframes == nframesToLearnBG+51)
 				cvSaveImage("jfg1.jpg",justForeground);
@@ -518,7 +564,7 @@ void processFrame()
 				cvSaveImage("raw9.jpg",rawImage);
 			else if(nframes == nframesToLearnBG+60)
 				cvSaveImage("raw10.jpg",rawImage);
-				
+			*/	
 
 				
 
@@ -530,16 +576,11 @@ void processFrame()
 			{
 				if(prevFrameMotionBlobs)
 				{
+
+					cvCopy(rawImage,output);
+
 					cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
 						
-					/*
-					IplImage pf_gray = prev_frame_gray;
-					IplImage* prevFrameMotionBlobs = &pf_gray;
-					IplImage nf_gray = frame_gray;
-					IplImage* justForegroundGray = &nf_gray;
-					IplImage nf = roi_image;
-					IplImage* imgC = &nf;
-					*/
 
 					CvSize      img_sz    = cvGetSize( prevFrameMotionBlobs );
 					int         win_size = 10;
@@ -618,7 +659,7 @@ void processFrame()
 						cvRound( cornersB[i].x ),
 						cvRound( cornersB[i].y )
 						);
-						cvLine( justForeground, p0, p1, CV_RGB(255,0,0),2 );
+						cvLine( output, p0, p1, CV_RGB(255,0,0),2 );
 					}
 
 					// save current frame as previous frame for next round
@@ -678,38 +719,44 @@ void processFrame()
 					
 			
 					//printf("contour1 size: %d\n",contours1->first->count);
-
+					
 					for (; contours1 != 0; contours1 = contours1->h_next)
 					{
 							
+						count1++;
 
 						rect1 = cvBoundingRect( contours1);
 
 						if(rect1.width * rect1.height < min_blob_area)
 						{
-							printf("ignoring small blob from prev frame...%d\n",count1);
+							//printf("ignoring small blob from prev frame...%d\n",count1);
+							//cvClearSeq(contours1);
 							continue;
 						}
 
 						cvPutText(prevFrameRaw,itoa(count1,buffer,10),Point(rect1.x,rect1.y), &font, CV_RGB(255, 255, 255));
-						cvDrawContours(prevFrameRaw,contours1,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-						cvShowImage("prev raw",prevFrameRaw);
+						cvDrawContours(prevFrameRaw,contours1,cvScalarAll(255),cvScalarAll(255),-1);
+						//cvShowImage("prev raw",prevFrameRaw);
 				
 						cvCopy(rawImage,output);
 
 						for(; contours2 != 0; contours2 = contours2->h_next)
 						{
+							count2++;
 							rect2 = cvBoundingRect( contours2);
 							if(rect2.width * rect2.height < min_blob_area)
 							{
-								printf("throwing out small blob from current frame....%d\n",count2);
+								//printf("throwing out small blob from current frame....%d\n",count2);
+								//cvClearSeq(contours2);
 								continue;
 							}
 
 								
-							cvPutText(output,itoa(count2,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(255, 255, 255));
-							cvDrawContours(output,contours2,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-							cvShowImage("current raw",output);
+							// current frame local blob count
+							//cvPutText(output,itoa(count2,buffer,10),Point(rect2.x,rect2.y+20), &font, CV_RGB(255, 255, 0));
+							
+							//cvDrawContours(output,contours2,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
+							//cvShowImage("current raw",output);
 							
 					
 							// log((moment_weight)moment difference) + log((size_weight)size difference) + log((location_weight)location difference)
@@ -721,40 +768,56 @@ void processFrame()
 							{
 								bestMatchesVal[count2] = compare_result;
 								bestMatchesId[count2] = count1;
-								curFrameColors[count2] = prevFrameColors[count1];
-								curFrameLabels[count2] = prevFrameLabels[count1];
 							}
 
 							printf("[%d][%d] compare result: %f\n",count1,count2,compare_result);
-							printf("area diff: %d | %d | %d\n",rect1.width*rect1.height,rect2.width*rect2.height,abs(rect1.width*rect1.height - rect2.width*rect2.height));
-							printf("location diff: %d | %d | %d\n",abs(rect1.x-rect2.x),abs(rect1.y-rect2.y),abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y));
-							cvWaitKey(0);
-							count2++;
+							printf("moment diff: %f\n",log(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))));
+							printf("area diff: %f\n",log((size_weight * (1+abs(rect1.width*rect1.height - rect2.width*rect2.height)))));
+							printf("location diff: %f\n",log((proximity_weight*(1+(abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y))))));
+							cvWaitKey(1);
+							
 						}
 						count2 = 0;
 						contours2 = contours_remember2;
-						count1++;
+						
 					}
 					count1 = 0;
-					contours1 = contours_remember1;			
+					contours1 = contours_remember1;		
 			
 					for(int m=0;m<100;m++)
 					{
 						if(bestMatchesId[m] != -1)
 						{
 							printf("best match for curr: %d is prev: %d with score of %f\n",m,bestMatchesId[m],bestMatchesVal[m]);
-							cvWaitKey(0);
+							if(bestMatchesVal[m] > blob_compare_threshold)
+							{
+								// assign blob a new id and color
+								curFrameColors[m] = CV_RGB( rand()&255, rand()&255, rand()&255 );
+								curFrameLabels[m] = ++blob_counter;
+							}
+							else
+							{
+								// assign matching id from previous frame
+								//curFrameColors[m] = prevFrameColors[bestMatchesId[m]];
+								curFrameLabels[m] = prevFrameLabels[bestMatchesId[m]];
+							}
+							cvWaitKey(1);
 						}
 					}
-
+					
+					cvShowImage("prev frame raw",prevFrameRaw);
+					cvShowImage("current raw",output);
+					cvWaitKey(1);
+					
 					// print contours with best match colors
 					count2=0;
 					for(; contours2 != 0; contours2 = contours2->h_next)
 					{
-						rect2 = cvBoundingRect( contours2);
+						count2++;
+						rect2 = cvBoundingRect(contours2);
 						if(rect2.width * rect2.height < min_blob_area)
 						{
-							printf("throwing out small blob....%d\n",count2);
+							//printf("throwing out small blob when displaying result (shouldn't happen if really removed previously....%d\n",count2);
 							continue;
 						}
 
@@ -766,11 +829,10 @@ void processFrame()
 						}
 
 						
-						cvDrawContours(output,contours2,curFrameColors[count2],curFrameColors[count2],-1,CV_FILLED);
+						//cvDrawContours(output,contours2,curFrameColors[count2],curFrameColors[count2],-1,CV_FILLED);
+						cvDrawContours(output,contours2,CV_RGB(255,255,255),CV_RGB(255,255,255),-1);
 						cvShowImage("current raw",output);
-						cvWaitKey(0);
-
-						count2++;
+						cvWaitKey(1);
 					}
 					count2 = 0;	
 						
@@ -796,6 +858,8 @@ void processFrame()
 						prevFrameLabels[c] = curFrameLabels[c];
 						curFrameLabels[c] = -1;
 					}
+
+					cvWaitKey(1);
 				}
 				else
 				{
@@ -915,8 +979,8 @@ void processFrame()
 					{
 						cvClearMemStorage( mem_storage );
 					}
-					cvFindContours(canny_output, mem_storage, &contours);
-
+					//cvFindContours(canny_output, mem_storage, &contours);
+					cvFindContours(canny_output, mem_storage, &contours,88,CV_RETR_EXTERNAL);
 						
 					//cvDrawContours(justForeground,contours,cvScalarAll(255),cvScalarAll(255),1);
 					vector<RotatedRect> minEllipse( contours->total );
@@ -1069,8 +1133,8 @@ void processFrame()
 				{
 					cvClearMemStorage( mem_storage );
 				}
-				cvFindContours(canny_output, mem_storage, &contours);
-
+				//cvFindContours(canny_output, mem_storage, &contours);
+				cvFindContours(canny_output, mem_storage, &contours,88,CV_RETR_EXTERNAL);
 				/// Draw contours
 				if( contours )
 				{
@@ -1080,9 +1144,14 @@ void processFrame()
         }
         //Display
         cvShowImage( "Raw", rawImage );
+		cvShowImage("Output",output);
         cvShowImage( "JustForeground", justForeground );
         cvShowImage( "ForegroundCodeBook",ImaskCodeBook);
 		cvShowImage("CodeBookClosed",ImaskCodeBookClosed);
+		if(nframes > nframesToLearnBG)
+			cvWaitKey(1);
+		else
+			cvWaitKey(40);
     }
 
     
