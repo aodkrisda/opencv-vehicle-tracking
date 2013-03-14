@@ -19,6 +19,11 @@ using namespace std;
 using namespace cv;
 using namespace cv::gpu;
 
+
+VideoCapture camera;
+CvVideoWriter* writer;
+IplImage *writeFrame = 0;
+
 //VARIABLES for CODEBOOK METHOD:
 CvBGCodeBookModel* model = 0;
 const int NCHANNELS = 3;
@@ -27,12 +32,13 @@ bool ch[NCHANNELS]={true,true,true}; // This sets what channels should be adjust
 
 const bool DRAW_CONTOURS = false;
 const bool TRACK_MOTION = true;
-const bool USE_LUCAS_KANADE = false;
+const bool USE_LUCAS_KANADE = true;
 const int MAX_CORNERS = 500;
 const bool USE_SIFT = false;
-const bool BLOB_COMPARE = true;
-const bool DEBUG = true;
+const bool BLOB_COMPARE = false;
+const bool DEBUG = false;
 const bool LIVE_DEMO = false;
+const bool SAVE_OUTPUT = false;
 
 // VARIABLES for FindContours
 int thresh = 200;
@@ -121,6 +127,7 @@ CvScalar prevFrameColors[100];
 CvScalar curFrameColors[100];
 int curFrameLabels[100];
 int prevFrameLabels[100];
+int labelsInUse[100];
 CvRect rect1;
 CvRect rect2;
 CvScalar color;
@@ -129,7 +136,7 @@ CvScalar color;
 float moment_weight = 1;
 float size_weight = 2;
 float proximity_weight = 20;
-float min_blob_area = 150;
+float min_blob_area = 100;
 int blob_counter = 0;
 float blob_compare_threshold = 15;
 
@@ -179,7 +186,13 @@ int main(int argc, char** argv)
 
 	printf("opening remote webcam...\n");
 
-    VideoCapture camera;
+
+	if(SAVE_OUTPUT)
+	{
+		// write mjpeg stream to video
+		CvSize size = cvSize(640,480);
+		writer = cvCreateVideoWriter("output.avi",CV_FOURCC('D','I','V','X'),15,size);
+	}
 /*
 // farneback example - dense optical flow map
 
@@ -466,8 +479,9 @@ void processFrame()
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
-			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
+			//cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			
+
 			// get a list of blobs (contours)
 			cvCanny( ImaskCodeBookClosed, canny_output, thresh, thresh*2, 3 );
 
@@ -495,9 +509,10 @@ void processFrame()
 
             // This part just to visualize bounding boxes and centers if desired
             cvCopy(ImaskCodeBook,ImaskCodeBookCC);
-			cvSet(justForeground, cvScalar(0,0,0));
+			//cvSet(justForeground, cvScalar(0,0,0));
+			//cvSegmentFGMask( ImaskCodeBookClosed,1,32.0F);
 			cvCopy(rawImage,justForeground,ImaskCodeBookClosed);
-            //cvSegmentFGMask( ImaskCodeBookCC );
+            
 
 
 			/*	
@@ -659,7 +674,8 @@ void processFrame()
 						cvRound( cornersB[i].x ),
 						cvRound( cornersB[i].y )
 						);
-						cvLine( output, p0, p1, CV_RGB(255,0,0),2 );
+						if(abs(p0.x*p0.x - p1.x*p1.x) + abs(p0.y*p0.y - p1.y*p1.y) > 10)
+							cvLine( output, p0, p1, CV_RGB(255,0,0),2 );
 					}
 
 					// save current frame as previous frame for next round
@@ -809,8 +825,13 @@ void processFrame()
 					cvShowImage("current raw",output);
 					cvWaitKey(1);
 					
-					// print contours with best match colors
+					// print labels for best matching blob from previous frame if a best match exists
 					count2=0;
+					for(int f=0;f<100;f++)
+					{
+						prevFrameLabels[f] = f;
+						labelsInUse[f] = -1;
+					}
 					for(; contours2 != 0; contours2 = contours2->h_next)
 					{
 						count2++;
@@ -824,7 +845,24 @@ void processFrame()
 						if(curFrameLabels[count2] != -1)
 						{
 							printf("matching label from previous frame %d\n",curFrameLabels[count2]);
-							cvPutText(output,itoa(curFrameLabels[count2],buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(0, 255, 0));
+
+							// if label is in use in the current frame... two blobs match a single blob in the previous frame, then split blob labels by giving subsequent blobs a fresh label
+							int label = -1;
+							for(int l=0;l<100;l++)
+							{
+								if(curFrameLabels[count2] == labelsInUse[l])
+								{
+									label = ++blob_counter;
+									break;
+								}
+							}
+							if(label == -1)
+							{
+								label = curFrameLabels[count2];
+							}
+							labelsInUse[count2] = label;
+							curFrameLabels[count2] = label;
+							cvPutText(output,itoa(label,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(0, 255, 0));
 							curFrameColors[count2] = CV_RGB( rand()&255, rand()&255, rand()&255 );
 						}
 
@@ -1148,6 +1186,29 @@ void processFrame()
         cvShowImage( "JustForeground", justForeground );
         cvShowImage( "ForegroundCodeBook",ImaskCodeBook);
 		cvShowImage("CodeBookClosed",ImaskCodeBookClosed);
+
+
+		if(SAVE_OUTPUT)
+		{
+			// create output image
+			Rect top(0, 0, rawImage->width, rawImage->height);
+			Rect bottom(0, rawImage->height-1, rawImage->width, rawImage->height);
+			writeFrame = cvCreateImage( cvSize(640,480), IPL_DEPTH_8U, 3 );
+			cvZero(writeFrame);
+			cvSetImageROI( writeFrame, top ); 
+			cvCopy(rawImage, writeFrame);
+			cvResetImageROI(writeFrame); 
+			cvSetImageROI( writeFrame, bottom);
+			//cvMerge(justForeground, justForeground, justForeground, NULL, writeFrame);
+			cvCopy(output, writeFrame);//, stacked, NULL ); 
+			cvWriteFrame(writer,writeFrame);
+			if(nframes >= 790)
+			{
+				cvReleaseVideoWriter( &writer );
+			
+			}
+		}
+
 		if(nframes > nframesToLearnBG)
 			cvWaitKey(1);
 		else
