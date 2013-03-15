@@ -1,43 +1,41 @@
-﻿Build started 3/14/2013 12:47:51 AM.
-     1>Project "C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\BackgroundSubtraction\BackgroundSubtraction.vcxproj" on node 2 (build target(s)).
+﻿Build started 3/14/2013 11:02:07 PM.
+     1>Project "C:\Users\mflakus\Desktop\Traffic Detection Final\Application\BackgroundSubtraction\BackgroundSubtraction\BackgroundSubtraction.vcxproj" on node 2 (build target(s)).
      1>InitializeBuildStatus:
          Creating "Debug\BackgroundSubtraction.unsuccessfulbuild" because "AlwaysCreate" was specified.
        ClCompile:
          All outputs are up-to-date.
-         C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Yu"StdAfx.h" /Fp"Debug\BackgroundSubtraction.pch" /Fo"Debug\\" /Fd"Debug\vc100.pdb" /Gd /TP /analyze- /errorReport:prompt BackgroundSubtraction.cpp
+         c:\Program Files\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Yu"StdAfx.h" /Fp"Debug\BackgroundSubtraction.pch" /Fo"Debug\\" /Fd"Debug\vc100.pdb" /Gd /TP /analyze- /errorReport:prompt BackgroundSubtraction.cpp
          BackgroundSubtraction.cpp
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(3): warning C4627: '#include <iostream>': skipped when looking for precompiled header use
-                 Add directive to 'StdAfx.h' or rebuild precompiled header
      1>c:\program files\opencv2.4.3\build\include\opencv2\legacy\blobtrack.hpp(187): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\string.h(105) : see declaration of 'strcpy'
+                 c:\program files\microsoft visual studio 10.0\vc\include\string.h(105) : see declaration of 'strcpy'
      1>c:\program files\opencv2.4.3\build\include\opencv2\legacy\blobtrack.hpp(256): warning C4996: 'strcat': This function or variable may be unsafe. Consider using strcat_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\string.h(110) : see declaration of 'strcat'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(753): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(865): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(967): warning C4018: '<' : signed/unsigned mismatch
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(988): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(989): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(991): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
-     1>c:\users\mikeflakus\documents\visual studio 2010\projects\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(1085): warning C4018: '<' : signed/unsigned mismatch
+                 c:\program files\microsoft visual studio 10.0\vc\include\string.h(110) : see declaration of 'strcat'
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(532): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
+                 c:\program files\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(643): warning C4996: 'itoa': The POSIX name for this item is deprecated. Instead, use the ISO C++ conformant name: _itoa. See online help for details.
+                 c:\program files\microsoft visual studio 10.0\vc\include\stdlib.h(867) : see declaration of 'itoa'
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(708): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(719): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(720): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(723): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
+     1>c:\users\mflakus\desktop\traffic detection final\application\backgroundsubtraction\backgroundsubtraction\backgroundsubtraction.cpp(761): warning C4018: '<' : signed/unsigned mismatch
        ManifestResourceCompile:
          All outputs are up-to-date.
        Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\Debug\BackgroundSubtraction.exe" /INCREMENTAL /NOLOGO "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_core243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_calib3d243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_contrib243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_features2d243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_flann243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_haartraining_engined.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_highgui243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_imgproc243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_legacy243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_ml243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_nonfree243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_objdetect243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_video243d.lib" kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /ManifestFile:"Debug\BackgroundSubtraction.exe.intermediate.manifest" /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /DEBUG /PDB:"C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\Debug\BackgroundSubtraction.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\Debug\BackgroundSubtraction.lib" /MACHINE:X86 Debug\BackgroundSubtraction.exe.embed.manifest.res
+         c:\Program Files\Microsoft Visual Studio 10.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\mflakus\Desktop\Traffic Detection Final\Application\BackgroundSubtraction\Debug\BackgroundSubtraction.exe" /INCREMENTAL /NOLOGO "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_core243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_calib3d243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_contrib243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_features2d243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_flann243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_haartraining_engined.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_highgui243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_imgproc243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_legacy243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_ml243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_nonfree243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_objdetect243d.lib" "C:\Program Files\OpenCV2.4.3\build\x86\vc10\lib\opencv_video243d.lib" kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /ManifestFile:"Debug\BackgroundSubtraction.exe.intermediate.manifest" /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /DEBUG /PDB:"C:\Users\mflakus\Desktop\Traffic Detection Final\Application\BackgroundSubtraction\Debug\BackgroundSubtraction.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\mflakus\Desktop\Traffic Detection Final\Application\BackgroundSubtraction\Debug\BackgroundSubtraction.lib" /MACHINE:X86 Debug\BackgroundSubtraction.exe.embed.manifest.res
          Debug\BackgroundSubtraction.obj
          Debug\stdafx.obj
        Manifest:
-         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\mt.exe /nologo /verbose /out:"Debug\BackgroundSubtraction.exe.embed.manifest" /manifest Debug\BackgroundSubtraction.exe.intermediate.manifest
+         C:\Program Files\Microsoft SDKs\Windows\v7.0A\bin\mt.exe /nologo /verbose /out:"Debug\BackgroundSubtraction.exe.embed.manifest" /manifest Debug\BackgroundSubtraction.exe.intermediate.manifest
          All outputs are up-to-date.
        LinkEmbedManifest:
          All outputs are up-to-date.
-         BackgroundSubtraction.vcxproj -> C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\Debug\BackgroundSubtraction.exe
+         BackgroundSubtraction.vcxproj -> C:\Users\mflakus\Desktop\Traffic Detection Final\Application\BackgroundSubtraction\Debug\BackgroundSubtraction.exe
        FinalizeBuildStatus:
          Deleting file "Debug\BackgroundSubtraction.unsuccessfulbuild".
          Touching "Debug\BackgroundSubtraction.lastbuildstate".
-     1>Done Building Project "C:\Users\mikeflakus\documents\visual studio 2010\Projects\BackgroundSubtraction\BackgroundSubtraction\BackgroundSubtraction.vcxproj" (build target(s)).
+     1>Done Building Project "C:\Users\mflakus\Desktop\Traffic Detection Final\Application\BackgroundSubtraction\BackgroundSubtraction\BackgroundSubtraction.vcxproj" (build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:02.98
+Time Elapsed 00:00:08.63
