@@ -1,6 +1,6 @@
 // BackgroundSubtraction.cpp : Defines the entry point for the console application.
 //
-#include <iostream>
+
 #include "stdafx.h"
 #include <opencv2\core\core.hpp>
 #include <opencv/cvaux.h>
@@ -10,16 +10,31 @@
 #include <opencv2/nonfree/features2d.hpp>
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/legacy/legacy.hpp>
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <opencv2/video/tracking.hpp>
 
 using namespace std;
 using namespace cv;
 using namespace cv::gpu;
 
 
+/********************************************/
+/** Application Options						*/
+/********************************************/
+const bool TRACK_MOTION = true;			// whether or not to track motion
+const bool DRAW_CONTOURS = false;		// display contour outlines in the output
+const bool DEBUG = false;
+const bool LIVE_DEMO = false;			// use input from a live traffic camera in real-time
+const bool SAVE_OUTPUT = false;			// save the output to an avi file named output.avi
+
+// motion tracking algorthm selection
+const bool USE_LUCAS_KANADE = false;
+const int  MAX_CORNERS = 500;
+const bool USE_SIFT = false;
+const bool BLOB_COMPARE = true;
+
+
+
+
+// Variables for saving output as a video
 VideoCapture camera;
 CvVideoWriter* writer;
 IplImage *writeFrame = 0;
@@ -30,45 +45,46 @@ const int NCHANNELS = 3;
 bool ch[NCHANNELS]={true,true,true}; // This sets what channels should be adjusted for background bounds
 
 
-const bool DRAW_CONTOURS = false;
-const bool TRACK_MOTION = true;
-const bool USE_LUCAS_KANADE = true;
-const int MAX_CORNERS = 500;
-const bool USE_SIFT = false;
-const bool BLOB_COMPARE = false;
-const bool DEBUG = false;
-const bool LIVE_DEMO = false;
-const bool SAVE_OUTPUT = false;
-
 // VARIABLES for FindContours
 int thresh = 200;
 int max_thresh = 255;
 cv::RNG rng(12345);
 
 
+// input filename, if used
 const char* filename = 0;
 
-bool pause = false;
-bool singlestep = false;
 
 IplImage ipl_image;
-IplImage *rawImage = 0, *yuvImage = 0; //yuvImage is for codebook method
+
+IplImage *rawImage = 0;
+IplImage *resized = 0;
+IplImage *yuvImage = 0; // yuvImage is for codebook method, because a color-spaced correlated with brightness is considered to be preferential for this method
+
 IplImage *justForeground = 0;
 IplImage *justForegroundGray = 0;
-IplImage *ImaskCodeBook = 0,*ImaskCodeBookCC = 0;
+
+IplImage *ImaskCodeBook = 0;
 IplImage *ImaskCodeBookInv = 0;
 IplImage *ImaskCodeBookClosed = 0;
-IplImage *prevFrameMotionBlobs = 0;
+
 IplImage *prevFrameRaw = 0;
+IplImage *prevFrameGray = 0;
+IplImage *prevFrameMotionBlobs = 0;
+
+
 IplImage *output = 0;
 CvCapture *capture = 0;
 cv::Mat_<cv::Vec3b> image;						
 
 int c, n, nframes = 0;
-int nframesToLearnBG = 300; // originally 300
 
 
-// Find Contours
+// number of frames used to learn the background using the codebook method
+int nframesToLearnBG = 300;
+
+
+// Find Contours Variables
 IplImage* canny_output = 0;
 IplImage* canny_output1 = 0;
 IplImage* canny_output2 = 0;
@@ -91,6 +107,7 @@ std::vector<KeyPoint> keypoints_1, keypoints_2;
 SiftDescriptorExtractor extractor;
 Mat descriptors_1, descriptors_2;
 BruteForceMatcher< L2<float> > matcher;
+// alternative option for matcher - FlannBasedMatcher
 //FlannBasedMatcher matcher;
 std::vector< DMatch > matches;
 std::vector< DMatch > good_matches;
@@ -103,21 +120,16 @@ int key2;
 int x_dist;
 int y_dist;
 
+// used to convert int to char* for printing number labels
 char buffer [33];
 
-// fitting ellipses
-CvMemStorage* stor;
-CvBox2D32f* box;
-CvPoint* PointArray;
-CvPoint2D32f* PointArray2D32f;
-
-// font
+// font used for printing text on the output image
 CvFont font;
 	
 
 
 
-// flakus blob motion
+// custom blob matcher variables
 double compare_result;
 int count1 = 0;
 int count2 = 0;
@@ -132,60 +144,22 @@ CvRect rect1;
 CvRect rect2;
 CvScalar color;
 
-// flakus weights
+// custom blob matcher weights
 float moment_weight = 1;
 float size_weight = 2;
 float proximity_weight = 20;
-float min_blob_area = 100;
+float min_blob_area = 20;
 int blob_counter = 0;
 float blob_compare_threshold = 15;
 
 void processFrame();
 
-void help()
-{
-    printf("\nLearn background and find foreground using simple average and average difference learning method:\n"
-        "\nUSAGE:\nbgfg_codebook [--nframes=300] [movie filename, else from camera]\n"
-        "***Keep the focus on the video windows, NOT the consol***\n\n"
-        "INTERACTIVE PARAMETERS:\n"
-        "\tESC,q,Q  - quit the program\n"
-        "\th	- print this help\n"
-        "\tp	- pause toggle\n"
-        "\ts	- single step\n"
-        "\tr	- run mode (single step off)\n"
-        "=== AVG PARAMS ===\n"
-        "\t-    - bump high threshold UP by 0.25\n"
-        "\t=    - bump high threshold DOWN by 0.25\n"
-        "\t[    - bump low threshold UP by 0.25\n"
-        "\t]    - bump low threshold DOWN by 0.25\n"
-        "=== CODEBOOK PARAMS ===\n"
-        "\ty,u,v- only adjust channel 0(y) or 1(u) or 2(v) respectively\n"
-        "\ta	- adjust all 3 channels at once\n"
-        "\tb	- adjust both 2 and 3 at once\n"
-        "\ti,o	- bump upper threshold up,down by 1\n"
-        "\tk,l	- bump lower threshold up,down by 1\n"
-        "\tSPACE - reset the model\n"
-        );
-}
 
 
-void drawOptFlowMap(const Mat& flow, Mat& cflowmap, int step,double scale, const Scalar& color)
-{
-	for(int y = 0; y < cflowmap.rows; y += step)
-	    for(int x = 0; x < cflowmap.cols; x += step)
-	    {
-	        const Point2f& fxy = flow.at<Point2f>(y, x);
-	        line(cflowmap, Point(x,y), Point(cvRound(x+fxy.x), cvRound(y+fxy.y)),
-	                color);
-	        circle(cflowmap, Point(x,y), 2, color, -1);
-	    }
-}
+
 
 int main(int argc, char** argv)
 {
-
-	printf("opening remote webcam...\n");
-
 
 	if(SAVE_OUTPUT)
 	{
@@ -193,285 +167,167 @@ int main(int argc, char** argv)
 		CvSize size = cvSize(640,480);
 		writer = cvCreateVideoWriter("output.avi",CV_FOURCC('D','I','V','X'),15,size);
 	}
-/*
-// farneback example - dense optical flow map
-
-	
-	camera.open("http://itwebcamcp700.fullerton.edu/mjpg/video.mjpg");
-
-
-
-Mat prevgray, gray, flow, cflow, frame;
-namedWindow("flow", 1);
-   
-for(;;)
-{
-    camera >> frame;
-	cvtColor(frame, gray, CV_BGR2GRAY);
-      
-	if( prevgray.data )
-	{
-		calcOpticalFlowFarneback(prevgray, gray, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
-		cvtColor(prevgray, cflow, CV_GRAY2BGR);
-		drawOptFlowMap(flow, cflow, 16, 1.5, CV_RGB(0, 255, 0));
-		imshow("flow", cflow);
-	}
-	if(waitKey(30)>=0)
-		break;
-	std::swap(prevgray, gray);
-}
-return 0;
-*/
-
 
 
 	if(LIVE_DEMO)
 	{
-	
+		printf("opening remote webcam...\n");
 		camera.open("http://itwebcamcp700.fullerton.edu/mjpg/video.mjpg");
+		
+		// alternative cameras used in testing
 		//camera.open("http://cam1.brentwood-tn.org/mjpg/video.mjpg");
 		//camera.open("http://216.8.159.21/mjpg/video.mjpg");
-		//camera.open("http://cyclops.american.edu/mjpg/video.mjpg");
 
 		//MAIN PROCESSING LOOP:
 		for(;;)
 		{
-			if( !pause )
-			{
-				camera.grab();
-				camera.retrieve(image);
+			camera.grab();
+			camera.retrieve(image);
 			
-				// Setup a rectangle to define region of interest
-				cv::Rect roi(0, cvRound(image.rows/2)-1, image.cols, cvRound(image.rows/2));
-				//cv::Rect roi(0, 0, image.cols-1, image.rows-1);
+			// Setup a rectangle to define region of interest
+			// bottom half of input from test cameras is the only relevant part for vehicles and pedestrians
+			cv::Rect roi(0, cvRound(image.rows/2)-1, image.cols, cvRound(image.rows/2));
 
-				// crop input image to just roi
-				ipl_image = image(roi);
+			// crop input image to just roi
+			ipl_image = image(roi);
 
-				/*
-				// equalize histogram to broaden color differences
-				if(ipl_image_eq == 0)
-				{
-					ipl_image_eq = cvCreateImage( cvGetSize(&ipl_image), IPL_DEPTH_8U, 3 );
-					r = cvCreateImage(cvGetSize(&ipl_image), IPL_DEPTH_8U, 1);
-					g = cvCreateImage(cvGetSize(&ipl_image), IPL_DEPTH_8U, 1);
-					b = cvCreateImage(cvGetSize(&ipl_image), IPL_DEPTH_8U, 1);
-				}
-				cvSplit(&ipl_image, b, g, r, NULL);
-				cvEqualizeHist( r, r );    //equalise r
-				cvEqualizeHist( g, g );    //equalise g
-				cvEqualizeHist( b, b );    //equalise b
-				cvMerge(b, g, r, NULL, ipl_image_eq);
-				*/
+
+			// resize input video frame size to 1/4 of the original size to speed up performance to real-time*
+			// *real-time performance is dependant on the tracking algorithm selected and the number of objects needing to be tracked
+			resized = cvCreateImage( cvSize(ipl_image.width/2,ipl_image.height/2),8, 3 );
+			cvResize(&ipl_image,resized);
 			
 
-				rawImage = &ipl_image;
+			rawImage = resized;
 
-				++nframes;
+			// update the frame counter
+			++nframes;
 
-				printf("frame: %d\n",nframes);
+			printf("frame: %d\n",nframes);
 
-				if(!rawImage) 
-					break;
+			if(!rawImage) 
+				break;
 
-
-				processFrame();
-			}
-			if( singlestep )
-				pause = true;
-        
-			// User input:
-			c = cvWaitKey(10)&0xFF;
-			c = tolower(c);
-			// End processing on ESC, q or Q
-			if(c == 27 || c == 'q')
-				break;
-			//Else check for user input
-			switch( c )
-			{
-			case 'h':
-				help();
-				break;
-			case 'p':
-				pause = !pause;
-				break;
-			case 's':
-				singlestep = !singlestep;
-				pause = false;
-				break;
-			case 'r':
-				pause = false;
-				singlestep = false;
-				break;
-			case ' ':
-				cvBGCodeBookClearStale( model, 0 );
-				nframes = 0;
-				break;
-				//CODEBOOK PARAMS
-			case 'y': case '0':
-			case 'u': case '1':
-			case 'v': case '2':
-			case 'a': case '3':
-			case 'b': 
-				ch[0] = c == 'y' || c == '0' || c == 'a' || c == '3';
-				ch[1] = c == 'u' || c == '1' || c == 'a' || c == '3' || c == 'b';
-				ch[2] = c == 'v' || c == '2' || c == 'a' || c == '3' || c == 'b';
-				printf("CodeBook YUV Channels active: %d, %d, %d\n", ch[0], ch[1], ch[2] );
-				break;
-			case 'i': //modify max classification bounds (max bound goes higher)
-			case 'o': //modify max classification bounds (max bound goes lower)
-			case 'k': //modify min classification bounds (min bound goes lower)
-			case 'l': //modify min classification bounds (min bound goes higher)
-				{
-				uchar* ptr = c == 'i' || c == 'o' ? model->modMax : model->modMin;
-				for(n=0; n<NCHANNELS; n++)
-				{
-					if( ch[n] )
-					{
-						int v = ptr[n] + (c == 'i' || c == 'l' ? 1 : -1);
-						ptr[n] = CV_CAST_8U(v);
-					}
-					printf("%d,", ptr[n]);
-				}
-				printf(" CodeBook %s Side\n", c == 'i' || c == 'o' ? "High" : "Low" );
-				}
-				break;
-			}
+			// process this frame of video
+			processFrame();
 		}
 	}
 	else
 	{
+		// use local test video rather than live traffic camera
 		capture = cvCaptureFromAVI("output1.avi"); 
-		IplImage *resized = 0;
 		for(;;)
 		{
-			if( !pause )
-			{
-				  
-				image = cvQueryFrame( capture );
+			image = cvQueryFrame( capture );
 
-				if(image.rows == 0 || image.cols == 0)
-					break;
+			if(image.rows == 0 || image.cols == 0)
+				break;
 
-				// Setup a rectangle to define region of interest
-				cv::Rect roi(0, cvRound(image.rows/2)-1, image.cols, cvRound(image.rows/2));
+			// Setup a rectangle to define region of interest
+			cv::Rect roi(0, cvRound(image.rows/2)-1, image.cols, cvRound(image.rows/2));
 
-				// crop input image to just roi
-				ipl_image = image(roi);
+			// crop input image to just roi
+			ipl_image = image(roi);
 
-				resized = cvCreateImage( cvSize(320,120),8, 3 );
-				cvResize(&ipl_image,resized);
+			resized = cvCreateImage( cvSize(ipl_image.width/2,ipl_image.height/2),8, 3 );
+			cvResize(&ipl_image,resized);
 
-				rawImage = &ipl_image;
+			rawImage = resized;
 
-				++nframes;
+			++nframes;
 
-				printf("frame: %d\n",nframes);
+			printf("frame: %d\n",nframes);
 
-				if(!rawImage) 
-					break;
+			if(!rawImage) 
+				break;
 
-				processFrame();
-			}
+			processFrame();
 		}
 	}
 
-	
-
-
-    		
-    
+    // release capture and gui output windows
     cvReleaseCapture( &capture );
-    cvDestroyWindow( "Raw" );
-    cvDestroyWindow( "ForegroundCodeBook");
-	// TODO: destroy other windows
+    cvDestroyWindow("Raw");
+	cvDestroyWindow("Output");
+    cvDestroyWindow("Foreground CodeBook");
+	cvDestroyWindow("Foreground CodeBook Closed");
+
     return 0;
 }
 
 
 void processFrame()
 {
-	//First time:
+	// during the first frame, allocate the necessary image containers for processing
     if( nframes == 1 && rawImage )
     {
         // CODEBOOK METHOD ALLOCATION
         yuvImage = cvCloneImage(rawImage);
-		justForeground = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, rawImage->nChannels );
-		justForegroundGray = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-        ImaskCodeBook = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-		ImaskCodeBookInv = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-		ImaskCodeBookClosed = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-        ImaskCodeBookCC = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-        canny_output = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-		canny_output1 = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-		canny_output2 = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-		output = cvCreateImage(cvGetSize(rawImage),IPL_DEPTH_8U,3);
-			
+		justForeground = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, rawImage->nChannels );
+		justForegroundGray = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+        ImaskCodeBook = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+		ImaskCodeBookInv = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+		ImaskCodeBookClosed = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+        canny_output = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+		canny_output1 = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+		canny_output2 = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+		output = cvCreateImage(cvGetSize(resized),IPL_DEPTH_8U,3);
+		prevFrameGray = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
         cvSet(ImaskCodeBook,cvScalar(255));
 
-
-		// initialize font
-		cvInitFont(&font, CV_FONT_HERSHEY_SIMPLEX, 0.5f, 0.5f, 0, 2);
 
 		// initialize codebook model
 		model = cvCreateBGCodeBookModel();
 		//Set color thresholds to default values
 		// oringal min = 3, max = 10 --> now 2 and 14
-		model->modMin[0] = 2;
-		model->modMin[1] = model->modMin[2] = 2;
+		model->modMin[0] = 1;
+		model->modMin[1] = model->modMin[2] = 1;
 		model->modMax[0] = 14;
 		model->modMax[1] = model->modMax[2] = 14;
 		model->cbBounds[0] = model->cbBounds[1] = model->cbBounds[2] = 14;
 
-		// initialize contour memory (probably not necessary)
+		// initialize font
+		cvInitFont(&font, CV_FONT_HERSHEY_SIMPLEX, 0.5f, 0.5f, 0, 2);
+
+		// initialize contour memory
 		contours_remember1 = contours1;
 		contours_remember2 = contours2;
 
+		// initialize blob labels
 		for(int f=0;f<100;f++)
 		{
 			prevFrameLabels[f] = f;
 		}
 
         cvNamedWindow("Raw",1);
-		cvNamedWindow("JustForeground",1);
-        cvNamedWindow("ForegroundCodeBook",1);
-		cvNamedWindow("CodeBookClosed",1);
+		cvNamedWindow("Output",1);
+        cvNamedWindow("Foreground CodeBook",1);
+		cvNamedWindow("Foreground CodeBook Closed",1);
     }
               
     if( rawImage )
     {
-		// meanshift
-		//cvPyrMeanShiftFiltering(rawImage,rawImage,10,10,1);
-
-		// blur input image to reduce noise
-		//cvSmooth(rawImage,rawImage);
-			
-
         cvCvtColor( rawImage, yuvImage, CV_BGR2YCrCb ); // convert to YUV
 
         // build background model
-        if( !pause && nframes-1 < nframesToLearnBG  )
+        if(nframes-1 < nframesToLearnBG  )
             cvBGCodeBookUpdate( model, yuvImage );
 
         if( nframes-1 == nframesToLearnBG  )
 		{
 			printf("codebook stale entries cleared\n");
             cvBGCodeBookClearStale( model, model->t/2 );
-		}   
-        //Find the foreground if any
+		}
+
+        // Find the foreground if any
         if( nframes-1 >= nframesToLearnBG  )
         {
             // Find foreground by codebook method
             cvBGCodeBookDiff( model, yuvImage, ImaskCodeBook );
 
-			if(nframes % 100 == 0)
-			{
-				//printf("codebook stale entries cleared\n");
-				//cvBGCodeBookClearStale(model,model->t/2);
-			}
 			cvCopy(ImaskCodeBook,ImaskCodeBookClosed);
 			
-			
+			// dilate and erode to close blobs
 			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvDilate(ImaskCodeBookClosed,ImaskCodeBookClosed);
@@ -479,7 +335,6 @@ void processFrame()
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
-			//cvErode(ImaskCodeBookClosed,ImaskCodeBookClosed);
 			
 
 			// get a list of blobs (contours)
@@ -496,93 +351,24 @@ void processFrame()
 			}
 			cvFindContours(canny_output, mem_storage, &contours,88,CV_RETR_EXTERNAL);
 
+
+			if(contours->first->count > 50)
+				cvBGCodeBookClearStale( model, 0 );
+
 			// fill in holes within each blob
 			cvDrawContours(ImaskCodeBookClosed,contours,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED, 8, cvPoint(0,0));
-			
-			
 
-			// invert the mask
+			/*
+			// invert the foreground mask to get the background mask -- used to show only the background (foreground removed)
 			for(int i=0;i<ImaskCodeBookClosed->height;i++)
 				for(int j=0;j<ImaskCodeBookClosed->width;j++)
 					for(int k=0;k<ImaskCodeBookClosed->nChannels;k++)  //loop to read for each channel
 						ImaskCodeBookInv->imageData[i*ImaskCodeBookClosed->widthStep+j*ImaskCodeBookClosed->nChannels+k]=255-ImaskCodeBookClosed->imageData[i*ImaskCodeBookClosed->widthStep+j*ImaskCodeBookClosed->nChannels+k];    //inverting the image
+			*/
 
-            // This part just to visualize bounding boxes and centers if desired
-            cvCopy(ImaskCodeBook,ImaskCodeBookCC);
-			//cvSet(justForeground, cvScalar(0,0,0));
-			//cvSegmentFGMask( ImaskCodeBookClosed,1,32.0F);
+			// create an image of just moving objects
 			cvCopy(rawImage,justForeground,ImaskCodeBookClosed);
             
-
-
-			/*	
-			// save image as jpg
-			if(nframes == nframesToLearnBG+51)
-				cvSaveImage("jfg1.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+52)
-				cvSaveImage("jfg2.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+53)
-				cvSaveImage("jfg3.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+54)
-				cvSaveImage("jfg4.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+55)
-				cvSaveImage("jfg5.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+56)
-				cvSaveImage("jfg6.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+57)
-				cvSaveImage("jfg7.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+58)
-				cvSaveImage("jfg8.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+59)
-				cvSaveImage("jfg9.jpg",justForeground);
-			else if(nframes == nframesToLearnBG+60)
-				cvSaveImage("jfg10.jpg",justForeground);
-
-			if(nframes == nframesToLearnBG+51)
-				cvSaveImage("blobs1.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+52)
-				cvSaveImage("blobs2.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+53)
-				cvSaveImage("blobs3.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+54)
-				cvSaveImage("blobs4.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+55)
-				cvSaveImage("blobs5.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+56)
-				cvSaveImage("blobs6.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+57)
-				cvSaveImage("blobs7.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+58)
-				cvSaveImage("blobs8.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+59)
-				cvSaveImage("blobs9.jpg",ImaskCodeBookClosed);
-			else if(nframes == nframesToLearnBG+60)
-				cvSaveImage("blobs10.jpg",ImaskCodeBookClosed);
-
-			if(nframes == nframesToLearnBG+51)
-				cvSaveImage("raw1.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+52)
-				cvSaveImage("raw2.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+53)
-				cvSaveImage("raw3.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+54)
-				cvSaveImage("raw4.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+55)
-				cvSaveImage("raw5.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+56)
-				cvSaveImage("raw6.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+57)
-				cvSaveImage("raw7.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+58)
-				cvSaveImage("raw8.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+59)
-				cvSaveImage("raw9.jpg",rawImage);
-			else if(nframes == nframesToLearnBG+60)
-				cvSaveImage("raw10.jpg",rawImage);
-			*/	
-
-				
-
 
 			/************************************/
 			/* Track Motion						*/
@@ -684,7 +470,7 @@ void processFrame()
 				else
 				{
 					// create the first previous frame
-					prevFrameMotionBlobs = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
+					prevFrameMotionBlobs = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
 					cvCvtColor(justForeground,prevFrameMotionBlobs,CV_BGR2GRAY);
 				}
 			}
@@ -694,9 +480,7 @@ void processFrame()
 			{
 				if(prevFrameMotionBlobs)
 				{
-					printf("\n\nNEW FRAME\n");
-
-					cvCopy(rawImage,output);
+					cvCopy(resized,output);
 
 					// get a list of blobs (contours)
 					cvCanny(prevFrameMotionBlobs, canny_output1, thresh, thresh*2, 3 );
@@ -722,10 +506,6 @@ void processFrame()
 					cvFindContours(canny_output2, mem_storage2, &contours2,88,CV_RETR_EXTERNAL);
 
 
-					//cvShowImage("canny 1",canny_output1);
-					//cvShowImage("canny 2",canny_output2);
-					//cvWaitKey(0);
-
 					contours_remember1 = contours1;
 					contours_remember2 = contours2;
 
@@ -733,8 +513,8 @@ void processFrame()
 					fill_n(bestMatchesId, 100, -1);
 					fill_n(curFrameLabels, 100, -1);
 					
-			
-					//printf("contour1 size: %d\n",contours1->first->count);
+					if(DEBUG)
+						printf("contour1 size: %d\n",contours1->first->count);
 					
 					for (; contours1 != 0; contours1 = contours1->h_next)
 					{
@@ -745,16 +525,14 @@ void processFrame()
 
 						if(rect1.width * rect1.height < min_blob_area)
 						{
-							//printf("ignoring small blob from prev frame...%d\n",count1);
-							//cvClearSeq(contours1);
+							// ignoring small blob from prev frame
 							continue;
 						}
 
 						cvPutText(prevFrameRaw,itoa(count1,buffer,10),Point(rect1.x,rect1.y), &font, CV_RGB(255, 255, 255));
 						cvDrawContours(prevFrameRaw,contours1,cvScalarAll(255),cvScalarAll(255),-1);
-						//cvShowImage("prev raw",prevFrameRaw);
 				
-						cvCopy(rawImage,output);
+						cvCopy(resized,output);
 
 						for(; contours2 != 0; contours2 = contours2->h_next)
 						{
@@ -767,13 +545,6 @@ void processFrame()
 								continue;
 							}
 
-								
-							// current frame local blob count
-							//cvPutText(output,itoa(count2,buffer,10),Point(rect2.x,rect2.y+20), &font, CV_RGB(255, 255, 0));
-							
-							//cvDrawContours(output,contours2,cvScalarAll(255),cvScalarAll(255),-1,CV_FILLED);
-							//cvShowImage("current raw",output);
-							
 					
 							// log((moment_weight)moment difference) + log((size_weight)size difference) + log((location_weight)location difference)
 							compare_result =	log(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))) +
@@ -785,13 +556,14 @@ void processFrame()
 								bestMatchesVal[count2] = compare_result;
 								bestMatchesId[count2] = count1;
 							}
-
-							printf("[%d][%d] compare result: %f\n",count1,count2,compare_result);
-							printf("moment diff: %f\n",log(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))));
-							printf("area diff: %f\n",log((size_weight * (1+abs(rect1.width*rect1.height - rect2.width*rect2.height)))));
-							printf("location diff: %f\n",log((proximity_weight*(1+(abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y))))));
-							cvWaitKey(1);
-							
+							if(DEBUG)
+							{
+								printf("[%d][%d] compare result: %f\n",count1,count2,compare_result);
+								printf("moment diff: %f\n",log(moment_weight * (1+cvMatchShapes(contours1,contours2,CV_CONTOURS_MATCH_I2))));
+								printf("area diff: %f\n",log((size_weight * (1+abs(rect1.width*rect1.height - rect2.width*rect2.height)))));
+								printf("location diff: %f\n",log((proximity_weight*(1+(abs(rect1.x-rect2.x)*abs(rect1.y-rect2.y))))));
+								cvWaitKey(1);
+							}
 						}
 						count2 = 0;
 						contours2 = contours_remember2;
@@ -800,11 +572,14 @@ void processFrame()
 					count1 = 0;
 					contours1 = contours_remember1;		
 			
+					// identify the best score of each blob in the current frame
 					for(int m=0;m<100;m++)
 					{
 						if(bestMatchesId[m] != -1)
 						{
-							printf("best match for curr: %d is prev: %d with score of %f\n",m,bestMatchesId[m],bestMatchesVal[m]);
+							if(DEBUG)
+								printf("best match for curr: %d is prev: %d with score of %f\n",m,bestMatchesId[m],bestMatchesVal[m]);
+
 							if(bestMatchesVal[m] > blob_compare_threshold)
 							{
 								// assign blob a new id and color
@@ -821,9 +596,11 @@ void processFrame()
 						}
 					}
 					
-					cvShowImage("prev frame raw",prevFrameRaw);
-					cvShowImage("current raw",output);
-					cvWaitKey(1);
+					if(DEBUG)
+					{
+						cvShowImage("prev frame raw",prevFrameRaw);
+						cvWaitKey(1);
+					}
 					
 					// print labels for best matching blob from previous frame if a best match exists
 					count2=0;
@@ -838,13 +615,14 @@ void processFrame()
 						rect2 = cvBoundingRect(contours2);
 						if(rect2.width * rect2.height < min_blob_area)
 						{
-							//printf("throwing out small blob when displaying result (shouldn't happen if really removed previously....%d\n",count2);
+							// throwing out small blob when displaying result
 							continue;
 						}
 
 						if(curFrameLabels[count2] != -1)
 						{
-							printf("matching label from previous frame %d\n",curFrameLabels[count2]);
+							if(DEBUG)
+								printf("matching label from previous frame %d\n",curFrameLabels[count2]);
 
 							// if label is in use in the current frame... two blobs match a single blob in the previous frame, then split blob labels by giving subsequent blobs a fresh label
 							int label = -1;
@@ -865,28 +643,13 @@ void processFrame()
 							cvPutText(output,itoa(label,buffer,10),Point(rect2.x,rect2.y), &font, CV_RGB(0, 255, 0));
 							curFrameColors[count2] = CV_RGB( rand()&255, rand()&255, rand()&255 );
 						}
-
-						
-						//cvDrawContours(output,contours2,curFrameColors[count2],curFrameColors[count2],-1,CV_FILLED);
-						cvDrawContours(output,contours2,CV_RGB(255,255,255),CV_RGB(255,255,255),-1);
-						cvShowImage("current raw",output);
-						cvWaitKey(1);
 					}
 					count2 = 0;	
 						
-					
-
-
-					//cvDrawContours(r2,contours2,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
-					//cvShowImage("current raw",output);
-					//cvDrawContours(r1,contours1,cvScalarAll(255),cvScalarAll(255),1,CV_FILLED);
-					//cvShowImage("prev raw",prevFrameRaw);
-
-					//cvWaitKey(0);
 
 					// save current frame as previous frame for next round
 					cvCopy(ImaskCodeBookClosed,prevFrameMotionBlobs);
-					cvCopy(rawImage,prevFrameRaw);
+					cvCopy(resized,prevFrameRaw);
 						
 					// copy colors
 					for(int c=0;c<100;c++)
@@ -896,41 +659,33 @@ void processFrame()
 						prevFrameLabels[c] = curFrameLabels[c];
 						curFrameLabels[c] = -1;
 					}
-
-					cvWaitKey(1);
 				}
 				else
 				{
 					// create the first previous frame
-					prevFrameMotionBlobs = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-					prevFrameRaw = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 3 );
+					prevFrameMotionBlobs = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 1 );
+					prevFrameRaw = cvCreateImage( cvGetSize(resized), IPL_DEPTH_8U, 3 );
 					cvCopy(ImaskCodeBookClosed,prevFrameMotionBlobs);
-					cvCopy(rawImage,prevFrameRaw);
+					cvCopy(resized,prevFrameRaw);
 				}
 			}
 
 
-
-
-
-
-
-
 			if(TRACK_MOTION && USE_SIFT)
 			{
-				if(prevFrameMotionBlobs)
+				if(prevFrameGray)
 				{
 					keypoints_1.clear();
 					keypoints_2.clear();
 					matches.clear();
 					good_matches.clear();
 
-					cvCvtColor(justForeground,justForegroundGray,CV_BGR2GRAY);
+					cvCvtColor(resized,justForegroundGray,CV_BGR2GRAY);
 
 					try
 					{
-						img1 = Mat(prevFrameMotionBlobs);
-						img2 = Mat(justForegroundGray);
+						img1 = Mat(justForegroundGray);
+						img2 = Mat(prevFrameGray);
 	
 						//-- Step 1: Detect the keypoints using SURF Detector
 						detector.detect( img1, keypoints_1 );
@@ -949,52 +704,30 @@ void processFrame()
 						printf("exception when extracting keypoints...%s\n",ex.msg);
 					}
 
-					/*
-					for( int i = 0; i < keypoints_1.size(); i++ )
-					{
-						printf("keypoint1 %d (%f,%f)\n",i,keypoints_1[i].pt.x,keypoints_1[i].pt.y);
-					}
-					for( int i = 0; i < keypoints_2.size(); i++ )
-					{
-						printf("keypoint2 %d (%f,%f)\n",i,keypoints_2[i].pt.x,keypoints_2[i].pt.y);
-					}
-					*/
-
-					//-- Draw only "good" matches (i.e. whose keypoint_distance is less than 2*min_dist )
-					//-- PS.- radiusMatch can also be used here.
-
 						
 					for( int i = 0; i < matches.size(); i++ )
 					{
 						key1 = matches[i].queryIdx;
 						key2 = matches[i].trainIdx;
 		
-						//printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+						if(DEBUG)
+							printf("%d) compare matches x[%f,%f] y[%f,%f]\n\n",i,keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
+
 						try
 						{
-							/*
-							if(abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x) < fuzziness_max)
-							{
-								printf("good x match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-							}
-
-							if(abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y) < fuzziness_max)
-							{
-								printf("good y match x[%f,%f] y[%f,%f]\n\n",keypoints_1[key1].pt.x,keypoints_2[key2].pt.x,keypoints_1[key1].pt.y,keypoints_2[key2].pt.y);
-							}
-							*/
-
 							// calculate keypoint_distance
 							x_dist = abs(keypoints_1[key1].pt.x-keypoints_2[key2].pt.x);
 							y_dist = abs(keypoints_1[key1].pt.y-keypoints_2[key2].pt.y);
-							printf("x-dist: %d | y-dist:%d | key1: %d | key2: %d\n",x_dist,y_dist,key1,key2);
+							if(DEBUG)
+								printf("x-dist: %d | y-dist:%d | key1: %d | key2: %d\n",x_dist,y_dist,key1,key2);
 							keypoint_distance = sqrt((double)((x_dist*x_dist) + (y_dist*y_dist)));
-							printf("keypoint_distance: %d\n",keypoint_distance);
-							if(keypoint_distance >= fuzziness_min && keypoint_distance < fuzziness_max)
+							if(DEBUG)
+								printf("keypoint_distance: %d\n",keypoint_distance);
+
+							// only consider a match a good match if it hasn't moved unrealistically far
+							if(keypoint_distance < fuzziness_max)
 							{
-								printf("");
 								good_matches.push_back( matches[i]);
-								printf("");
 							}
 						}
 						catch(Exception ex)
@@ -1003,7 +736,6 @@ void processFrame()
 						}
 					}
 						
-
 						
 					// get a list of blobs (contours)
 					cvCanny( ImaskCodeBookClosed, canny_output, thresh, thresh*2, 3 );
@@ -1017,10 +749,8 @@ void processFrame()
 					{
 						cvClearMemStorage( mem_storage );
 					}
-					//cvFindContours(canny_output, mem_storage, &contours);
 					cvFindContours(canny_output, mem_storage, &contours,88,CV_RETR_EXTERNAL);
 						
-					//cvDrawContours(justForeground,contours,cvScalarAll(255),cvScalarAll(255),1);
 					vector<RotatedRect> minEllipse( contours->total );
 
 					if( contours )
@@ -1028,60 +758,6 @@ void processFrame()
 						int contour_counter = 0;
 						for (; contours != 0; contours = contours->h_next)
 						{
-								
-							/*
-							// try to fit ellipses to blobs to fill them in
-							int i; // Indicator of cycle.
-							int count = contours->total; // This is number point in contour
-							CvPoint center;
-							CvSize size;
-        
-							// Number point must be more than or equal to 6 (for cvFitEllipse_32f).        
-							if( count < 6 )
-								continue;
-        
-							// Alloc memory for contour point set.    
-							PointArray = (CvPoint*)malloc( count*sizeof(CvPoint) );
-							PointArray2D32f= (CvPoint2D32f*)malloc( count*sizeof(CvPoint2D32f) );
-        
-							// Alloc memory for ellipse data.
-							box = (CvBox2D32f*)malloc(sizeof(CvBox2D32f));
-        
-							// Get contour point set.
-							cvCvtSeqToArray(contours, PointArray, CV_WHOLE_SEQ);
-        
-							// Convert CvPoint set to CvBox2D32f set.
-							for(i=0; i<count; i++)
-							{
-								PointArray2D32f[i].x = (float)PointArray[i].x;
-								PointArray2D32f[i].y = (float)PointArray[i].y;
-							}
-        
-							// Fits ellipse to current contour.
-							cvFitEllipse(PointArray2D32f, count, box);
-							//cvFitEllipse2();
-        
-							// Draw current contour.
-							//cvDrawContours(rawImage,cont,CV_RGB(255,255,255),CV_RGB(255,255,255),0,1,8,cvPoint(0,0));
-        
-							// Convert ellipse data from float to integer representation.
-							center.x = cvRound(box->center.x);
-							center.y = cvRound(box->center.y);
-							size.width = cvRound(box->size.width*0.5);
-							size.height = cvRound(box->size.height*0.5);
-							box->angle = -box->angle;
-        
-							// Draw ellipse.
-							cvEllipse(ImaskCodeBookClosed, center, size,
-										box->angle, 0, 360,
-										CV_RGB(255,255,255), CV_FILLED, CV_AA, 0);
-
-							*/
-
-
-
-
-
 							for( int i = 0; i < good_matches.size(); i++ )
 							{
 								if(cvPointPolygonTest(contours,keypoints_2[good_matches[i].trainIdx].pt,0) > 0)
@@ -1089,43 +765,12 @@ void processFrame()
 									cvDrawContours(justForeground, contours, CV_RGB(255,0,0), CV_RGB(255,0,0), -1, CV_FILLED, 8, cvPoint(0,0));
 									break;
 								}
-								else
-								{
-									//cvDrawContours(justForeground, contours, CV_RGB(0,255,0), CV_RGB(0,255,0), -1, CV_FILLED, 8, cvPoint(0,0));
-								}
 							}
 						}
-						/*
-							
-							for (; contours != 0; contours = contours->h_next)
-							{
-								// check to see if keypoint is in this contour
-								printf("%d) poly test: %f\n",i,cvPointPolygonTest(contours,keypoints_2[good_matches[i].trainIdx].pt,0));
-									
-								if(cvPointPolygonTest(contours,keypoints_2[good_matches[i].trainIdx].pt,0) > 0)
-								{
-									cvDrawContours(justForeground, contours, CV_RGB(0,255,0), CV_RGB(255,0,0), -1, CV_FILLED, 8, cvPoint(0,0));
-								}
-								else
-								{
-									//CvScalar ext_color = CV_RGB( rand()&255, rand()&255, rand()&255 ); //randomly color different contours
-									cvDrawContours(justForeground, contours, CV_RGB(255,0,0), CV_RGB(255,0,0), -1, CV_FILLED, 8, cvPoint(0,0));
-								}
-								break;
-							}
-						}
-						*/
 					}
-						
-					//cvDrawContours(justForeground, contours, CV_RGB(255,0,0), CV_RGB(255,0,0), -1, CV_FILLED, 8, cvPoint(0,0));
-						
-					// for each good match, identify the blob the match pertains to
-
-						
 
 
 					//-- Draw only "good" matches
-						
 					try
 					{
 						drawMatches( img1, keypoints_1, img2, keypoints_2,
@@ -1138,26 +783,16 @@ void processFrame()
 						printf("exception when drawing matches...\n");
 					}
 						
-
-					/*
-					for( int i = 0; i < matches.size(); i++ )
-					{ 
-						printf( "-- Good Match [%d] Keypoint 1: %d  -- Keypoint 2: %d  \n", i, matches[i].queryIdx, matches[i].trainIdx ); 
-					}
-					*/
-						
 					// save current frame as previous frame for next round
-					cvCopy(justForegroundGray,prevFrameMotionBlobs);
+					cvCopy(justForegroundGray,prevFrameGray);
 				}
 				else
 				{
 					// create the first previous frame
-					prevFrameMotionBlobs = cvCreateImage( cvGetSize(rawImage), IPL_DEPTH_8U, 1 );
-					cvCvtColor(justForeground,prevFrameMotionBlobs,CV_BGR2GRAY);
+					cvCvtColor(resized,prevFrameGray,CV_BGR2GRAY);
 				}
 			}
 
-			/// Detect edges using canny
 			if(DRAW_CONTOURS)
 			{
 				cvCanny( ImaskCodeBookClosed, canny_output, thresh, thresh*2, 3 );
@@ -1176,17 +811,19 @@ void processFrame()
 				/// Draw contours
 				if( contours )
 				{
-					cvDrawContours(justForeground,contours,cvScalarAll(255),cvScalarAll(255),1);
+					cvDrawContours(output,contours,cvScalarAll(255),cvScalarAll(255),1);
 				}
 			}
         }
-        //Display
-        cvShowImage( "Raw", rawImage );
-		cvShowImage("Output",output);
-        cvShowImage( "JustForeground", justForeground );
-        cvShowImage( "ForegroundCodeBook",ImaskCodeBook);
-		cvShowImage("CodeBookClosed",ImaskCodeBookClosed);
 
+
+
+        // display graphical results
+        cvShowImage("Raw", rawImage );
+		cvShowImage("Output",output);
+		cvShowImage("Foreground CodeBook",ImaskCodeBook);
+		cvShowImage("Foreground CodeBook Closed",ImaskCodeBookClosed);
+		
 
 		if(SAVE_OUTPUT)
 		{
@@ -1200,16 +837,16 @@ void processFrame()
 			cvResetImageROI(writeFrame); 
 			cvSetImageROI( writeFrame, bottom);
 			//cvMerge(justForeground, justForeground, justForeground, NULL, writeFrame);
-			cvCopy(output, writeFrame);//, stacked, NULL ); 
+			cvCopy(output, writeFrame);
 			cvWriteFrame(writer,writeFrame);
 			if(nframes >= 790)
 			{
 				cvReleaseVideoWriter( &writer );
-			
 			}
 		}
 
-		if(nframes > nframesToLearnBG)
+
+		if(nframes > nframesToLearnBG || LIVE_DEMO)
 			cvWaitKey(1);
 		else
 			cvWaitKey(40);
