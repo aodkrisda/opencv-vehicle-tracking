@@ -1,0 +1,1 @@
+This application detects motion using a background learning codebook to segment moving objects from the background. Segmented blobs are then tracked frame to frame.
